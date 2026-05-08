@@ -1,0 +1,2448 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>中國史時間地圖</title>
+  <style>
+    :root {
+      --paper: #f6ecd8;
+      --ink: #211a12;
+      --panel: rgba(255, 251, 241, .94);
+      --line: rgba(52, 40, 26, .18);
+      --shadow: 0 16px 38px rgba(31, 23, 12, .18);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #17120b;
+      color: var(--ink);
+      font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.07), transparent 16%, transparent 84%, rgba(0,0,0,.08)),
+        var(--paper);
+    }
+
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    canvas.dragging { cursor: grabbing; }
+
+    .toolbar {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .title {
+      min-width: 190px;
+      padding: 0 10px 0 3px;
+      border-right: 1px solid var(--line);
+      line-height: 1.2;
+    }
+
+    .title strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .title span {
+      display: block;
+      margin-top: 3px;
+      color: #70634f;
+      font-size: 11px;
+    }
+
+    button {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid rgba(54, 42, 28, .18);
+      border-radius: 7px;
+      background: #fff8e8;
+      color: #2d2418;
+      font: 800 15px/1 system-ui, sans-serif;
+      cursor: pointer;
+    }
+
+    button:hover { background: #fff0cc; }
+
+    .search { position: relative; width: min(330px, 34vw); }
+
+    .search input {
+      width: 100%;
+      height: 34px;
+      border: 1px solid rgba(54, 42, 28, .18);
+      border-radius: 7px;
+      background: #fffaf0;
+      padding: 0 34px 0 11px;
+      color: #2d2418;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .search::after {
+      content: "⌕";
+      position: absolute;
+      right: 10px;
+      top: 4px;
+      color: #8a765d;
+      font-size: 20px;
+      pointer-events: none;
+    }
+
+    .range-control {
+      height: 34px;
+      border: 1px solid rgba(54, 42, 28, .18);
+      border-radius: 7px;
+      background: #fffaf0;
+      padding: 0 10px;
+      color: #2d2418;
+      font: 700 12px "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      outline: none;
+    }
+
+    .suggestions {
+      position: absolute;
+      top: 40px;
+      left: 0;
+      right: 0;
+      max-height: 310px;
+      overflow: auto;
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fffaf0;
+      box-shadow: var(--shadow);
+    }
+
+    .suggestions.visible { display: block; }
+
+    .suggestion {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(54,42,28,.08);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .suggestion:hover { background: #fff0ce; }
+
+    .suggestion small {
+      display: block;
+      margin-top: 2px;
+      color: #746752;
+      font-size: 11px;
+    }
+
+    .dock {
+      position: absolute;
+      right: 14px;
+      top: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .dock > * { pointer-events: auto; }
+
+    .event-panel,
+    .minimap-panel {
+      width: 300px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 251, 241, .9);
+      box-shadow: var(--shadow);
+    }
+
+    .event-panel { max-height: 360px; }
+
+    .event-panel.collapsed,
+    .minimap-panel.collapsed {
+      position: relative;
+      width: 42px;
+      height: 104px;
+      display: grid;
+      grid-template-rows: 34px 1fr;
+      place-items: center;
+    }
+
+    .event-panel.collapsed .event-list,
+    .event-panel.collapsed #eventPanelTitle,
+    .minimap-panel.collapsed .minimap-wrap { display: none; }
+
+    .event-panel.collapsed::after,
+    .minimap-panel.collapsed::after {
+      content: "大事";
+      writing-mode: vertical-rl;
+      color: #5a4b36;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .minimap-panel.collapsed::after { content: "小圖"; }
+
+    .event-head,
+    .minimap-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-bottom: 1px solid rgba(54,42,28,.12);
+      color: #3d3223;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .event-panel.collapsed .event-head,
+    .minimap-panel.collapsed .minimap-head {
+      width: 100%;
+      justify-content: center;
+      padding: 4px 0;
+      border-bottom: 0;
+    }
+
+    .event-head button,
+    .minimap-head button {
+      width: 26px;
+      height: 26px;
+      font-size: 12px;
+    }
+
+    .event-list {
+      max-height: 318px;
+      overflow: auto;
+      padding: 5px 0;
+    }
+
+    .event-row {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 7px;
+      padding: 5px 9px;
+      color: #3d3223;
+      font-size: 11px;
+      line-height: 1.3;
+      cursor: pointer;
+    }
+
+    .event-row:hover { background: rgba(197, 146, 78, .14); }
+
+    .event-year {
+      color: #7a674f;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .note {
+      max-width: 375px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      color: #4d402f;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .minimap-panel {
+      width: 138px;
+      background: var(--panel);
+    }
+
+    .minimap-wrap {
+      width: 138px;
+      height: 220px;
+      padding: 8px;
+    }
+
+    #minimap {
+      position: static;
+      width: 100%;
+      height: 100%;
+      border-radius: 5px;
+      background: #fbf0db;
+      cursor: crosshair;
+    }
+
+    .tooltip {
+      position: absolute;
+      z-index: 10;
+      min-width: 176px;
+      max-width: 280px;
+      display: none;
+      padding: 7px 8px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 6px;
+      background: rgba(28, 22, 15, .98);
+      color: #fff8e9;
+      box-shadow: 0 12px 26px rgba(0,0,0,.36);
+      pointer-events: none;
+    }
+
+    .tooltip strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 12px;
+    }
+
+    .tooltip span {
+      color: #f0d8b1;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    .tooltip a {
+      color: #fff2ad;
+      text-decoration: none;
+      pointer-events: auto;
+    }
+
+    .tooltip a:hover { text-decoration: underline; }
+
+    .mobile-strip {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      z-index: 9;
+      display: none;
+      grid-template-columns: 36px 1fr 36px;
+      gap: 7px;
+      align-items: center;
+      padding: 7px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 251, 241, .94);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .mobile-strip span {
+      overflow: hidden;
+      color: #3d3223;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 760px) {
+      .toolbar {
+        left: 8px;
+        right: 8px;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 7px;
+      }
+
+      .title {
+        width: auto;
+        min-width: 136px;
+        flex: 1 1 136px;
+        border-right: 0;
+      }
+
+      .title span { display: none; }
+
+      .search {
+        flex: 1 1 100%;
+        width: auto;
+      }
+
+      .range-control {
+        flex: 1 1 140px;
+        min-width: 132px;
+      }
+
+      .note { display: none; }
+      .event-panel { max-width: calc(100vw - 16px); }
+
+      .dock {
+        right: 8px;
+        top: auto;
+        bottom: 8px;
+      }
+
+      .minimap-panel,
+      .minimap-wrap {
+        width: 96px;
+      }
+
+      .minimap-wrap {
+        height: 150px;
+        padding: 6px;
+      }
+
+      .mobile-strip { display: grid; }
+
+      .tooltip { pointer-events: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="timeline" aria-label="中國史時間地圖"></canvas>
+    <div class="toolbar">
+      <div class="title">
+        <strong>中國史時間地圖</strong>
+        <span>西元前 2100 → 2026，古代在下</span>
+      </div>
+      <button id="zoomIn" type="button" title="放大">+</button>
+      <button id="zoomOut" type="button" title="縮小">−</button>
+      <button id="fit" type="button" title="回到全圖">⌂</button>
+      <button id="fullscreen" type="button" title="全螢幕">⛶</button>
+      <select id="rangeSelect" class="range-control" title="切換時間範圍" aria-label="切換時間範圍"></select>
+      <div class="search">
+        <input id="searchInput" type="search" placeholder="搜尋朝代、人物、事件、制度" autocomplete="off">
+        <div id="suggestions" class="suggestions"></div>
+      </div>
+    </div>
+    <div class="dock">
+      <div class="note">拖曳移動畫面，滾輪縮放。事件點滑過可看說明，右鍵開啟維基百科。這份獨立頁面加強《史記》、漢、唐、清、民國初年。</div>
+      <div id="eventPanel" class="event-panel">
+        <div class="event-head">
+          <button id="eventPanelToggle" type="button" title="收合大事年表">×</button>
+          <span id="eventPanelTitle">視窗大事</span>
+        </div>
+        <div id="eventList" class="event-list"></div>
+      </div>
+      <div id="minimapPanel" class="minimap-panel">
+        <div class="minimap-head">
+          <button id="minimapToggle" type="button" title="收合小地圖">×</button>
+        </div>
+        <div class="minimap-wrap"><canvas id="minimap" aria-label="中國史縮圖"></canvas></div>
+      </div>
+    </div>
+    <div class="mobile-strip">
+      <button id="mobilePrevTrack" type="button" title="上一欄">‹</button>
+      <span id="mobileTrackLabel">分裂與並存</span>
+      <button id="mobileNextTrack" type="button" title="下一欄">›</button>
+    </div>
+    <div id="tooltip" class="tooltip"></div>
+  </div>
+
+  <script>
+    const ABS_YEAR_MIN = -2100;
+    const ABS_YEAR_MAX = 2026;
+    let YEAR_MIN = ABS_YEAR_MIN;
+    let YEAR_MAX = ABS_YEAR_MAX;
+    const WORLD = { left: 400, right: 70, top: 92, bottom: 92, trackWidth: 190, gap: 14, height: 7600 };
+    const RULER_AXIS = { x: 82, width: 94 };
+    const CORE_AXIS = { x: 190, width: 168 };
+    const DEFAULT_TIME_SEGMENTS = [
+      { start: -2100, end: 1800, weight: 1 },
+      { start: 1800, end: 1900, weight: 3 },
+      { start: 1900, end: 2026, weight: 8 }
+    ];
+    let TIME_SEGMENTS = DEFAULT_TIME_SEGMENTS.map(segment => ({ ...segment }));
+    const timeRanges = [
+      { id: "all", label: "全史", min: -2100, max: 2026, focus: 1919, segments: DEFAULT_TIME_SEGMENTS },
+      { id: "preqin", label: "先秦", min: -2100, max: -221, focus: -770 },
+      { id: "qinhan", label: "秦漢", min: -221, max: 220, focus: -100 },
+      { id: "division", label: "魏晉南北朝", min: 220, max: 589, focus: 420 },
+      { id: "suitang", label: "隋唐五代", min: 589, max: 960, focus: 755 },
+      { id: "songyuan", label: "宋元", min: 960, max: 1368, focus: 1127 },
+      { id: "mingqing", label: "明清", min: 1368, max: 1912, focus: 1840, segments: [
+        { start: 1368, end: 1800, weight: 1 },
+        { start: 1800, end: 1912, weight: 4 }
+      ] },
+      { id: "modern", label: "近現代", min: 1912, max: 2026, focus: 1937, segments: [
+        { start: 1912, end: 1949, weight: 10 },
+        { start: 1949, end: 2026, weight: 7 }
+      ] }
+    ];
+    let activeRange = timeRanges[0];
+
+    const tracks = [
+      { id: "parallel", name: "分裂與並存", color: "#d8793c", width: 780 },
+      { id: "frontier", name: "邊疆/草原", color: "#7b8fce" },
+      { id: "taiwan", name: "台灣/海疆", color: "#2d9c8c" },
+      { id: "thought", name: "思想與史學", color: "#8f6bc8" },
+      { id: "institutions", name: "制度/經濟", color: "#cfaa4a" },
+      { id: "wars", name: "戰爭/變局", color: "#8d6c4f" },
+      { id: "global", name: "全球影響", color: "#5d84c9" }
+    ];
+
+    const wiki = (title) => `https://zh.wikipedia.org/wiki/${encodeURIComponent(title)}`;
+    const governance = (overrides = {}) => ({
+      verified: true,
+      sourceLevel: "B",
+      sourceNote: "Wikipedia/通行歷史年表初核",
+      confidence: "medium",
+      ...overrides
+    });
+    const p = (id, name, track, lane, start, end, link, meta = {}) => ({ id, name, track, lane, start, end, wiki: wiki(link || name), ...governance(meta) });
+    const e = (id, name, year, track, lane, link, note = "", meta = {}) => ({ id, name, year, track, lane, wiki: wiki(link || name), note, ...governance(meta) });
+    const ce = (id, name, year, link, note = "", meta = {}) => ({ id, name, year, core: true, wiki: wiki(link || name), note, ...governance(meta) });
+    const r = (id, name, title, start, end, polity, link, note = "", uncertain = false) => ({
+      id, name, title, start, end, polity, wiki: wiki(link || name), note, uncertain,
+      ...governance(uncertain ? { confidence: "low", sourceNote: "年代約略或傳說性質，需保留不確定註記" } : {})
+    });
+
+    const rulers = [
+      r("yu", "禹", "王", -2070, -2000, "夏", "禹", "傳說時代君主，年代採約略標示。", true),
+      r("jie", "桀", "王", -1650, -1600, "夏", "桀", "夏末君主，年代約略。", true),
+      r("tang-shang", "成湯", "王", -1600, -1580, "商", "成湯", "商朝建立者。", true),
+      r("pan-geng", "盤庚", "王", -1300, -1250, "商", "盤庚", "遷殷。", true),
+      r("wu-ding", "武丁", "王", -1250, -1192, "商", "武丁", "商代中興君主。", true),
+      r("zhou", "紂", "王", -1075, -1046, "商", "帝辛", "商末君主。", true),
+      r("zhou-wuwang", "周武王", "天子", -1046, -1043, "西周", "周武王"),
+      r("zhou-chengwang", "周成王", "天子", -1042, -1021, "西周", "周成王"),
+      r("zhou-kangwang", "周康王", "天子", -1020, -996, "西周", "周康王"),
+      r("zhou-muwang", "周穆王", "天子", -976, -922, "西周", "周穆王"),
+      r("zhou-liwang", "周厲王", "天子", -877, -841, "西周", "周厲王"),
+      r("gonghe", "共和行政", "共治", -841, -828, "西周", "共和行政"),
+      r("zhou-xuanwang", "周宣王", "天子", -827, -782, "西周", "周宣王"),
+      r("zhou-youwang", "周幽王", "天子", -781, -771, "西周", "周幽王"),
+      r("zhou-pingwang", "周平王", "天子", -770, -720, "東周", "周平王", "春秋戰國法統主線以周天子為主。"),
+      r("zhou-huanwang", "周桓王", "天子", -719, -697, "東周", "周桓王"),
+      r("zhou-xiangwang", "周襄王", "天子", -651, -619, "東周", "周襄王"),
+      r("zhou-jingwang", "周景王", "天子", -544, -520, "東周", "周景王"),
+      r("zhou-zhending", "周貞定王", "天子", -468, -441, "東周", "周貞定王"),
+      r("zhou-xianwang", "周顯王", "天子", -368, -321, "東周", "周顯王"),
+      r("zhou-nanwang", "周赧王", "天子", -314, -256, "東周", "周赧王"),
+      r("qin-shihuang", "秦始皇", "皇帝", -221, -210, "秦", "秦始皇"),
+      r("qin-er-shi", "秦二世", "皇帝", -210, -207, "秦", "秦二世"),
+      r("han-gaozu", "漢高祖", "皇帝", -202, -195, "西漢", "漢高祖"),
+      r("han-huidi", "漢惠帝", "皇帝", -195, -188, "西漢", "漢惠帝"),
+      r("lvhou", "呂后", "臨朝", -188, -180, "西漢", "呂雉", "實際掌權者。"),
+      r("han-wendi", "漢文帝", "皇帝", -180, -157, "西漢", "漢文帝"),
+      r("han-jingdi", "漢景帝", "皇帝", -157, -141, "西漢", "漢景帝"),
+      r("han-wudi-r", "漢武帝", "皇帝", -141, -87, "西漢", "漢武帝"),
+      r("han-zhaodi", "漢昭帝", "皇帝", -87, -74, "西漢", "漢昭帝"),
+      r("han-xuandi", "漢宣帝", "皇帝", -74, -49, "西漢", "漢宣帝"),
+      r("han-yuandi", "漢元帝", "皇帝", -49, -33, "西漢", "漢元帝"),
+      r("han-chengdi", "漢成帝", "皇帝", -33, -7, "西漢", "漢成帝"),
+      r("han-aidi", "漢哀帝", "皇帝", -7, -1, "西漢", "漢哀帝"),
+      r("wang-mang-r", "王莽", "皇帝", 9, 23, "新", "王莽"),
+      r("han-guangwu", "光武帝", "皇帝", 25, 57, "東漢", "光武帝"),
+      r("han-mingdi", "漢明帝", "皇帝", 57, 75, "東漢", "漢明帝"),
+      r("han-zhangdi", "漢章帝", "皇帝", 75, 88, "東漢", "漢章帝"),
+      r("han-hedi", "漢和帝", "皇帝", 88, 106, "東漢", "漢和帝"),
+      r("han-shundi", "漢順帝", "皇帝", 125, 144, "東漢", "漢順帝"),
+      r("han-lingdi", "漢靈帝", "皇帝", 168, 189, "東漢", "漢靈帝"),
+      r("han-xiandi", "漢獻帝", "皇帝", 189, 220, "東漢", "漢獻帝"),
+      r("cao-pi-r", "曹丕", "皇帝", 220, 226, "曹魏", "曹丕"),
+      r("cao-rui", "曹叡", "皇帝", 226, 239, "曹魏", "曹叡"),
+      r("cao-fang", "曹芳", "皇帝", 239, 254, "曹魏", "曹芳"),
+      r("cao-huan", "曹奐", "皇帝", 260, 266, "曹魏", "曹奐"),
+      r("sima-yan", "晉武帝", "皇帝", 266, 290, "西晉", "晉武帝"),
+      r("jin-huidi", "晉惠帝", "皇帝", 290, 307, "西晉", "晉惠帝"),
+      r("jin-huai-mindi", "懷愍二帝", "皇帝", 307, 316, "西晉", "晉懷帝"),
+      r("jin-yuandi", "晉元帝", "皇帝", 317, 323, "東晉", "晉元帝"),
+      r("jin-mingdi", "晉明帝", "皇帝", 323, 325, "東晉", "晉明帝"),
+      r("jin-chengdi", "晉成帝", "皇帝", 325, 342, "東晉", "晉成帝"),
+      r("jin-xiaowu", "晉孝武帝", "皇帝", 372, 396, "東晉", "晉孝武帝"),
+      r("jin-gongdi", "晉恭帝", "皇帝", 419, 420, "東晉", "晉恭帝"),
+      r("liu-yu-r", "劉裕", "皇帝", 420, 422, "劉宋", "劉裕", "南北朝法統主線採南朝。"),
+      r("song-wendi", "宋文帝", "皇帝", 424, 453, "劉宋", "宋文帝_(劉宋)"),
+      r("qi-gaodi", "蕭道成", "皇帝", 479, 482, "南齊", "蕭道成"),
+      r("qi-wudi", "齊武帝", "皇帝", 482, 493, "南齊", "齊武帝"),
+      r("liang-wudi", "梁武帝", "皇帝", 502, 549, "南梁", "梁武帝"),
+      r("liang-yuandi", "梁元帝", "皇帝", 552, 555, "南梁", "梁元帝"),
+      r("chen-baxian", "陳霸先", "皇帝", 557, 559, "南陳", "陳霸先"),
+      r("chen-houzhu", "陳後主", "皇帝", 582, 589, "南陳", "陳後主"),
+      r("sui-wendi", "隋文帝", "皇帝", 581, 604, "隋", "隋文帝"),
+      r("sui-yangdi", "隋煬帝", "皇帝", 604, 618, "隋", "隋煬帝"),
+      r("tang-gaozu", "唐高祖", "皇帝", 618, 626, "唐", "唐高祖"),
+      r("tang-taizong", "唐太宗", "皇帝", 626, 649, "唐", "唐太宗"),
+      r("tang-gaozong", "唐高宗", "皇帝", 649, 683, "唐", "唐高宗"),
+      r("wu-zetian-r", "武則天", "皇帝", 690, 705, "武周", "武則天"),
+      r("tang-zhongzong", "唐中宗", "皇帝", 705, 710, "唐", "唐中宗"),
+      r("tang-xuanzong", "唐玄宗", "皇帝", 712, 756, "唐", "唐玄宗"),
+      r("tang-suzong", "唐肅宗", "皇帝", 756, 762, "唐", "唐肅宗"),
+      r("tang-daizong", "唐代宗", "皇帝", 762, 779, "唐", "唐代宗"),
+      r("tang-dezong", "唐德宗", "皇帝", 779, 805, "唐", "唐德宗"),
+      r("tang-xianzong", "唐憲宗", "皇帝", 805, 820, "唐", "唐憲宗"),
+      r("tang-wuzong", "唐武宗", "皇帝", 840, 846, "唐", "唐武宗"),
+      r("tang-xizong", "唐僖宗", "皇帝", 873, 888, "唐", "唐僖宗"),
+      r("tang-aidi", "唐哀帝", "皇帝", 904, 907, "唐", "唐哀帝"),
+      r("zhu-wen-r", "朱溫", "皇帝", 907, 912, "後梁", "朱溫", "五代十國法統主線採中原五代。"),
+      r("li-cunxu", "李存勗", "皇帝", 923, 926, "後唐", "李存勗"),
+      r("li-siyuan", "李嗣源", "皇帝", 926, 933, "後唐", "李嗣源"),
+      r("shi-jingtang", "石敬瑭", "皇帝", 936, 942, "後晉", "石敬瑭"),
+      r("liu-zhiyuan", "劉知遠", "皇帝", 947, 948, "後漢", "劉知遠"),
+      r("guo-wei", "郭威", "皇帝", 951, 954, "後周", "郭威"),
+      r("chai-rong", "柴榮", "皇帝", 954, 959, "後周", "柴榮"),
+      r("song-taizu", "宋太祖", "皇帝", 960, 976, "北宋", "宋太祖"),
+      r("song-taizong", "宋太宗", "皇帝", 976, 997, "北宋", "宋太宗"),
+      r("song-zhenzong", "宋真宗", "皇帝", 997, 1022, "北宋", "宋真宗"),
+      r("song-renzong", "宋仁宗", "皇帝", 1022, 1063, "北宋", "宋仁宗"),
+      r("song-shenzong", "宋神宗", "皇帝", 1067, 1085, "北宋", "宋神宗"),
+      r("song-huizong", "宋徽宗", "皇帝", 1100, 1126, "北宋", "宋徽宗"),
+      r("song-qinzong", "宋欽宗", "皇帝", 1126, 1127, "北宋", "宋欽宗"),
+      r("song-gaozong", "宋高宗", "皇帝", 1127, 1162, "南宋", "宋高宗", "南宋時期法統主線採南宋。"),
+      r("song-xiaozong", "宋孝宗", "皇帝", 1162, 1189, "南宋", "宋孝宗"),
+      r("song-ningzong", "宋寧宗", "皇帝", 1194, 1224, "南宋", "宋寧宗"),
+      r("song-lizong", "宋理宗", "皇帝", 1224, 1264, "南宋", "宋理宗"),
+      r("song-duzong", "宋度宗", "皇帝", 1264, 1274, "南宋", "宋度宗"),
+      r("song-bing", "趙昺", "皇帝", 1278, 1279, "南宋", "趙昺"),
+      r("kublai", "忽必烈", "皇帝", 1271, 1294, "元", "忽必烈"),
+      r("temur", "元成宗", "皇帝", 1294, 1307, "元", "元成宗"),
+      r("yuan-wuzong", "元武宗", "皇帝", 1307, 1311, "元", "元武宗"),
+      r("yuan-rensong", "元仁宗", "皇帝", 1311, 1320, "元", "元仁宗"),
+      r("yuan-shundi", "元順帝", "皇帝", 1333, 1368, "元", "元順帝"),
+      r("ming-taizu", "明太祖", "皇帝", 1368, 1398, "明", "明太祖"),
+      r("jianwen", "建文帝", "皇帝", 1398, 1402, "明", "建文帝"),
+      r("yongle", "明成祖", "皇帝", 1402, 1424, "明", "明成祖"),
+      r("hongxi", "明仁宗", "皇帝", 1424, 1425, "明", "明仁宗"),
+      r("xuande", "明宣宗", "皇帝", 1425, 1435, "明", "明宣宗"),
+      r("zhengtong", "明英宗", "皇帝", 1435, 1449, "明", "明英宗", "正統年間，土木堡之變後被俘。"),
+      r("jingtai", "明景帝", "皇帝", 1449, 1457, "明", "明景帝"),
+      r("tianshun", "明英宗復辟", "皇帝", 1457, 1464, "明", "明英宗", "奪門之變後復辟，改元天順。"),
+      r("chenghua", "明憲宗", "皇帝", 1464, 1487, "明", "明憲宗"),
+      r("hongzhi", "明孝宗", "皇帝", 1487, 1505, "明", "明孝宗"),
+      r("zhengde", "明武宗", "皇帝", 1505, 1521, "明", "明武宗"),
+      r("jiajing", "嘉靖帝", "皇帝", 1521, 1567, "明", "嘉靖帝"),
+      r("longqing", "隆慶帝", "皇帝", 1567, 1572, "明", "隆慶帝"),
+      r("wanli", "萬曆帝", "皇帝", 1572, 1620, "明", "萬曆帝"),
+      r("taichang", "泰昌帝", "皇帝", 1620, 1620.08, "明", "泰昌帝"),
+      r("tianqi", "天啟帝", "皇帝", 1620.08, 1627, "明", "天啟帝"),
+      r("chongzhen", "崇禎帝", "皇帝", 1627, 1644, "明", "崇禎帝"),
+      r("nurhaci-r", "努爾哈赤", "大汗", 1616, 1626, "後金", "努爾哈赤", "後金建立者，清朝開國主線。"),
+      r("hong-taiji", "皇太極", "皇帝", 1626, 1643, "後金/清", "皇太極", "1636 年改國號為大清。"),
+      r("shunzhi", "順治帝", "皇帝", 1644, 1661, "清", "順治帝"),
+      r("kangxi-r", "康熙帝", "皇帝", 1661, 1722, "清", "康熙帝"),
+      r("yongzheng", "雍正帝", "皇帝", 1722, 1735, "清", "雍正帝"),
+      r("qianlong", "乾隆帝", "皇帝", 1735, 1796, "清", "乾隆帝"),
+      r("jiaqing", "嘉慶帝", "皇帝", 1796, 1820, "清", "嘉慶帝"),
+      r("daoguang", "道光帝", "皇帝", 1820, 1850, "清", "道光帝"),
+      r("xianfeng", "咸豐帝", "皇帝", 1850, 1861, "清", "咸豐帝"),
+      r("tongzhi-r", "同治帝", "皇帝", 1861, 1875, "清", "同治帝"),
+      r("guangxu", "光緒帝", "皇帝", 1875, 1908, "清", "光緒帝"),
+      r("xuantong-r", "宣統帝", "皇帝", 1908, 1912, "清", "宣統帝"),
+      r("sun-yatsen", "孫中山", "臨時大總統", 1912, 1912.25, "中華民國", "孫中山"),
+      r("yuan-shikai-r", "袁世凱", "大總統", 1912.25, 1916, "北洋政府", "袁世凱"),
+      r("li-yuanhong", "黎元洪", "大總統", 1916, 1917, "北洋政府", "黎元洪"),
+      r("feng-guozhang", "馮國璋", "代理大總統", 1917, 1918, "北洋政府", "馮國璋"),
+      r("xu-shichang", "徐世昌", "大總統", 1918, 1922, "北洋政府", "徐世昌"),
+      r("cao-kun", "曹錕", "大總統", 1923, 1924, "北洋政府", "曹錕"),
+      r("zhang-zuolin", "張作霖", "安國軍政府", 1927, 1928, "北洋/奉系", "張作霖"),
+      r("chiang-r", "蔣中正", "國民政府主席", 1928, 1949, "南京國民政府", "蔣中正", "民國法統主線採南京國民政府；部分時段有代理與主席更替。"),
+      r("mao-r", "毛澤東", "主要領導人", 1949, 1976, "中華人民共和國", "毛澤東"),
+      r("hua-guofeng", "華國鋒", "主要領導人", 1976, 1978, "中華人民共和國", "華國鋒"),
+      r("deng-r", "鄧小平", "主要領導人", 1978, 1989, "中華人民共和國", "鄧小平"),
+      r("jiang-zemin", "江澤民", "主要領導人", 1989, 2002, "中華人民共和國", "江澤民"),
+      r("hu-jintao", "胡錦濤", "主要領導人", 2002, 2012, "中華人民共和國", "胡錦濤"),
+      r("xi-jinping", "習近平", "主要領導人", 2012, 2026, "中華人民共和國", "習近平")
+    ];
+
+    const coreAxis = [
+      ca("xia", "夏", -2070, -1600, "#b95a44", "夏朝"),
+      ca("shang", "商", -1600, -1046, "#b96f3f", "商朝"),
+      ca("western-zhou", "西周", -1046, -771, "#c28a43", "西周"),
+      ca("spring-autumn", "春秋", -770, -476, "#d69a4a", "春秋时期", "周室衰微，諸侯爭霸"),
+      ca("warring", "戰國", -475, -221, "#d88645", "戰國時期", "七雄並立，秦逐步兼併"),
+      ca("qin", "秦", -221, -206, "#b94c3a", "秦朝"),
+      ca("western-han", "西漢", -202, 8, "#c94f3b", "西漢"),
+      ca("xin", "新", 9, 23, "#8e6a5a", "新朝"),
+      ca("eastern-han", "東漢", 25, 220, "#c85d45", "東漢"),
+      ca("three-kingdoms", "三國", 220, 280, "#d8793c", "三國", "曹魏、蜀漢、東吳並立"),
+      ca("western-jin", "西晉", 266, 316, "#bd5f47", "西晉"),
+      ca("eastern-jin-sixteen", "東晉/十六國", 317, 420, "#d8894a", "東晉十六國", "南方東晉與北方十六國並存"),
+      ca("north-south", "南北朝", 420, 589, "#d99c55", "南北朝", "南朝宋齊梁陳；北朝魏齊周"),
+      ca("sui", "隋", 581, 618, "#b94c3a", "隋朝"),
+      ca("tang", "唐", 618, 907, "#cf5b3f", "唐朝"),
+      ca("five-ten", "五代十國", 907, 960, "#d8793c", "五代十國", "中原五代更替，南方十國並存"),
+      ca("northern-song", "北宋", 960, 1127, "#c75e42", "北宋"),
+      ca("southern-song", "南宋", 1127, 1279, "#d0744a", "南宋", "與金、西夏等政權並存"),
+      ca("yuan", "元", 1271, 1368, "#a95d4b", "元朝"),
+      ca("ming", "明", 1368, 1644, "#c94f3b", "明朝"),
+      ca("qing", "清", 1644, 1912, "#b94c3a", "清朝"),
+      ca("republic-warlords", "民國/軍閥", 1912, 1949, "#d8793c", "中華民國大陸時期", "北洋、南京國民政府、中共根據地等並存"),
+      ca("prc", "中華人民共和國", 1949, 2026, "#c94f3b", "中華人民共和國")
+    ];
+
+    function ca(id, name, start, end, color, link, note = "") {
+      return { id, name, start, end, color, wiki: wiki(link || name), note };
+    }
+
+    const periods = [
+      p("state-lu", "魯", "parallel", 0, -1042, -256, "魯國"),
+      p("state-qi", "齊", "parallel", 1, -1046, -221, "齊國"),
+      p("state-jin", "晉", "parallel", 2, -1033, -376, "晉國"),
+      p("state-qin", "秦國", "parallel", 3, -900, -221, "秦國"),
+      p("state-chu", "楚", "parallel", 4, -1030, -223, "楚國"),
+      p("state-song", "宋", "parallel", 5, -1040, -286, "宋國"),
+      p("state-wu", "吳", "parallel", 6, -1200, -473, "吳國", { confidence: "low", sourceNote: "早期起源含傳說，春秋晚期史實較明確" }),
+      p("state-yue", "越", "parallel", 7, -600, -222, "越國", { confidence: "medium", sourceNote: "修正為春秋晚期至秦滅越系政權的保守範圍" }),
+      p("state-yan", "燕", "parallel", 8, -1044, -222, "燕國"),
+      p("state-zhao", "趙", "parallel", 9, -403, -222, "趙國"),
+      p("state-wei", "魏", "parallel", 10, -403, -225, "魏國"),
+      p("state-han", "韓", "parallel", 11, -403, -230, "韓國_(戰國)"),
+      p("state-zheng", "鄭", "parallel", 12, -806, -375, "鄭國"),
+      p("state-zhongshan", "中山", "parallel", 13, -414, -296, "中山國"),
+      p("cao-wei", "曹魏", "parallel", 0, 220, 266, "曹魏"),
+      p("shu-han", "蜀漢", "parallel", 1, 221, 263, "蜀漢"),
+      p("wu", "東吳", "parallel", 2, 229, 280, "東吳"),
+      p("sixteen", "五胡十六國", "parallel", 0, 304, 439, "五胡十六國"),
+      p("han-zhao", "漢趙/前趙", "parallel", 2, 304, 329, "漢趙"),
+      p("cheng-han", "成漢", "parallel", 3, 304, 347, "成漢"),
+      p("later-zhao", "後趙", "parallel", 4, 319, 351, "後趙"),
+      p("former-liang", "前涼", "parallel", 5, 301, 376, "前涼"),
+      p("former-yan", "前燕", "parallel", 6, 337, 370, "前燕"),
+      p("former-qin", "前秦", "parallel", 7, 351, 394, "前秦"),
+      p("later-qin", "後秦", "parallel", 8, 384, 417, "後秦"),
+      p("later-yan", "後燕", "parallel", 9, 384, 407, "後燕"),
+      p("western-qin", "西秦", "parallel", 10, 385, 431, "西秦"),
+      p("later-liang-16", "後涼", "parallel", 11, 386, 403, "後涼"),
+      p("southern-liang", "南涼", "parallel", 12, 397, 414, "南涼"),
+      p("northern-liang", "北涼", "parallel", 13, 397, 439, "北涼"),
+      p("southern-yan", "南燕", "parallel", 14, 398, 410, "南燕"),
+      p("western-liang", "西涼", "parallel", 15, 400, 421, "西涼"),
+      p("xia-16", "夏", "parallel", 16, 407, 431, "夏_(十六國)"),
+      p("northern-yan", "北燕", "parallel", 17, 407, 436, "北燕"),
+      p("north-south-parallel", "南北朝", "parallel", 1, 420, 589, "南北朝"),
+      p("liu-song", "劉宋", "parallel", 0, 420, 479, "劉宋"),
+      p("southern-qi", "南齊", "parallel", 1, 479, 502, "南齊"),
+      p("liang-dynasty", "南梁", "parallel", 2, 502, 557, "梁_(南朝)"),
+      p("chen-dynasty", "南陳", "parallel", 3, 557, 589, "陳_(南朝)"),
+      p("northern-wei", "北魏", "parallel", 10, 386, 535, "北魏"),
+      p("eastern-wei", "東魏", "parallel", 11, 534, 550, "東魏"),
+      p("western-wei", "西魏", "parallel", 12, 535, 557, "西魏"),
+      p("northern-qi", "北齊", "parallel", 13, 550, 577, "北齊"),
+      p("northern-zhou", "北周", "parallel", 14, 557, 581, "北周"),
+      p("wu-zhou", "武周", "parallel", 18, 690, 705, "武周"),
+      p("five-dynasties", "五代總覽", "parallel", 3, 907, 960, "五代十國"),
+      p("later-liang", "後梁", "parallel", 3, 907, 923, "後梁"),
+      p("later-tang", "後唐", "parallel", 3, 923, 936, "後唐"),
+      p("later-jin", "後晉", "parallel", 3, 936, 947, "後晉"),
+      p("later-han", "後漢", "parallel", 3, 947, 951, "後漢_(五代)"),
+      p("later-zhou", "後周", "parallel", 3, 951, 960, "後周"),
+      p("ten-kingdoms", "十國總覽", "parallel", 4, 907, 979, "十國_(五代十國)"),
+      p("yang-wu", "楊吳", "parallel", 4, 902, 937, "楊吳"),
+      p("southern-tang", "南唐", "parallel", 4, 937, 975, "南唐"),
+      p("jingnan", "荊南/南平", "parallel", 5, 924, 963, "荊南"),
+      p("min", "閩", "parallel", 6, 909, 945, "閩國"),
+      p("chu", "馬楚", "parallel", 7, 907, 951, "楚_(十國)"),
+      p("former-shu", "前蜀", "parallel", 8, 907, 925, "前蜀"),
+      p("later-shu", "後蜀", "parallel", 8, 934, 965, "後蜀"),
+      p("southern-han", "南漢", "parallel", 9, 917, 971, "南漢"),
+      p("northern-han", "北漢", "parallel", 9, 951, 979, "北漢"),
+      p("wuyue", "吳越", "parallel", 10, 907, 978, "吳越"),
+      p("xiongnu-threat", "匈奴壓力", "frontier", 0, -318, 89, "匈奴"),
+      p("western-regions", "西域經營與綠洲諸國", "frontier", 1, -138, 439, "西域都護府"),
+      p("xianbei-threat", "鮮卑與北方民族", "frontier", 0, 156, 439, "鮮卑"),
+      p("rouran", "柔然汗國", "frontier", 1, 330, 555, "柔然"),
+      p("turkic-khaganate", "突厥汗國", "frontier", 0, 552, 744, "突厥汗國"),
+      p("tibetan-empire", "吐蕃壓力", "frontier", 1, 618, 842, "吐蕃"),
+      p("uighur-khaganate", "回鶻汗國", "frontier", 0, 744, 840, "回鶻汗國"),
+      p("liao", "遼", "frontier", 0, 916, 1125, "遼朝"),
+      p("western-xia", "西夏", "frontier", 1, 1038, 1227, "西夏"),
+      p("jin-dynasty", "金", "frontier", 0, 1115, 1234, "金朝"),
+      p("liao-parallel", "遼", "parallel", 11, 916, 1125, "遼朝"),
+      p("western-xia-parallel", "西夏", "parallel", 12, 1038, 1227, "西夏"),
+      p("jin-parallel", "金", "parallel", 13, 1115, 1234, "金朝"),
+      p("mongol-threat", "蒙古帝國/北方壓力", "frontier", 1, 1206, 1368, "蒙古帝國"),
+      p("northern-yuan", "北元", "frontier", 0, 1368, 1635, "北元"),
+      p("oirat-tatar", "瓦剌/韃靼", "frontier", 1, 1400, 1550, "瓦剌"),
+      p("wokou", "倭寇與海防壓力", "frontier", 1, 1350, 1567, "倭寇"),
+      p("later-jin-qing-frontier", "後金/清入關壓力", "frontier", 0, 1616, 1644, "後金"),
+      p("russian-frontier", "俄羅斯東進", "frontier", 1, 1643, 1860, "俄羅斯帝國"),
+      p("dzungar-threat", "準噶爾汗國", "frontier", 0, 1634, 1758, "準噶爾汗國"),
+      p("british-russian-great-game", "英俄中亞壓力", "frontier", 1, 1830, 1917, "大博弈"),
+      p("japan-imperial-threat", "日本帝國壓力", "frontier", 0, 1894, 1945, "大日本帝國"),
+      p("dashun", "大順", "parallel", 1, 1644, 1645, "大順_(政權)"),
+      p("daxi", "大西", "parallel", 2, 1644, 1647, "大西"),
+      p("southern-ming", "南明總覽", "parallel", 3, 1644, 1662, "南明"),
+      p("hongguang", "弘光政權", "parallel", 3, 1644, 1645, "弘光帝"),
+      p("longwu", "隆武政權", "parallel", 4, 1645, 1646, "隆武帝"),
+      p("yongli", "永曆政權", "parallel", 5, 1646, 1662, "永曆帝"),
+      p("tungning-parallel", "明鄭/東寧", "parallel", 6, 1661, 1683, "東寧王國"),
+      p("taiping", "太平天國", "parallel", 1, 1851, 1864, "太平天國"),
+      p("roc-mainland", "民國初年/北洋", "parallel", 14, 1912, 1928, "北洋政府"),
+      p("warlord-factions", "北洋軍閥割據", "parallel", 15, 1916, 1928, "北洋軍閥"),
+      p("anhui-clique", "皖系", "parallel", 15, 1916, 1920, "皖系軍閥"),
+      p("zhili-clique", "直系", "parallel", 16, 1916, 1924, "直系軍閥"),
+      p("fengtian-clique", "奉系", "parallel", 17, 1916, 1928, "奉系軍閥"),
+      p("guangdong-gov", "廣州軍政府", "parallel", 18, 1917, 1925, "護法軍政府"),
+      p("nanjing-decade", "南京國民政府", "parallel", 14, 1928, 1937, "國民政府"),
+      p("ccp-base", "中共根據地", "parallel", 16, 1927, 1949, "中國共產革命"),
+      p("jiangxi-soviet", "中央蘇區", "parallel", 16, 1931, 1934, "中央革命根據地"),
+      p("yanan-base", "陝甘寧邊區", "parallel", 16, 1937, 1949, "陝甘寧邊區"),
+      p("manchukuo", "滿洲國", "parallel", 17, 1932, 1945, "滿洲國"),
+      p("wang-jingwei", "汪精衛政權", "parallel", 18, 1940, 1945, "汪精衛政權"),
+      p("war-resistance", "抗戰與內戰", "wars", 0, 1937, 1949, "中國抗日戰爭"),
+      p("taiwan-indigenous", "原住民族與史前文化", "taiwan", 0, -2100, 1624, "台灣史前時期"),
+      p("dutch-formosa", "荷據時期", "taiwan", 0, 1624, 1662, "荷屬福爾摩沙"),
+      p("spanish-formosa", "西班牙北台灣", "taiwan", 1, 1626, 1642, "西班牙福爾摩沙"),
+      p("kingdom-tungning", "鄭氏治台", "taiwan", 0, 1661, 1683, "東寧王國"),
+      p("qing-taiwan", "清領時期", "taiwan", 0, 1683, 1895, "臺灣清治時期"),
+      p("taiwan-province-qing", "福建臺灣省", "taiwan", 1, 1885, 1895, "福建臺灣省"),
+      p("japanese-taiwan", "日治時期", "taiwan", 0, 1895, 1945, "臺灣日治時期"),
+      p("roc-taiwan", "中華民國在台灣", "taiwan", 0, 1945, 2026, "中華民國臺灣時期"),
+      p("taiwan-martial", "台灣戒嚴時期", "taiwan", 1, 1949, 1987, "臺灣省戒嚴令"),
+      p("taiwan-democracy", "台灣民主化", "taiwan", 1, 1987, 2026, "臺灣民主化"),
+      p("silk-road", "絲綢之路與歐亞交流", "global", 0, -138, 1500, "絲綢之路"),
+      p("buddhism-global", "佛教入華與中亞網絡", "global", 1, 65, 845, "佛教傳入漢地"),
+      p("mongol-eurasia", "蒙古歐亞網絡", "global", 0, 1206, 1368, "蒙古帝國"),
+      p("maritime-trade", "海禁、開海與海貿", "global", 1, 1371, 1757, "海禁"),
+      p("global-industrial", "工業革命與西力東漸", "global", 0, 1760, 1914, "西力東漸"),
+      p("global-imperialism", "帝國主義與條約體系", "global", 1, 1842, 1945, "帝國主義"),
+      p("global-socialism", "社會主義與共產國際", "global", 0, 1917, 1991, "共產國際"),
+      p("global-ww2-order", "二戰後國際秩序", "global", 1, 1945, 1991, "冷戰"),
+      p("global-globalization", "全球化與科技網絡", "global", 0, 1978, 2026, "全球化"),
+
+      p("hundred-schools", "諸子百家", "thought", 0, -770, -221, "諸子百家"),
+      p("confucian-state", "儒學國教化", "thought", 0, -136, 220, "罷黜百家，獨尊儒術"),
+      p("shiji-period", "《史記》成書", "thought", 1, -145, -86, "史記"),
+      p("buddhism", "佛教中國化", "thought", 0, 65, 845, "中國佛教史"),
+      p("neo-confucian", "理學", "thought", 0, 960, 1644, "理學"),
+      p("kaozheng", "考據學", "thought", 1, 1644, 1912, "考據學"),
+      p("new-culture", "新文化運動", "thought", 0, 1915, 1923, "新文化運動"),
+
+      p("junxian", "郡縣制", "institutions", 0, -221, 2026, "郡縣制"),
+      p("currency-line", "貨幣制度線", "institutions", 0, -221, 1935, "中國貨幣史"),
+      p("salt-iron-state", "鹽鐵官營", "institutions", 2, -120, 90, "鹽鐵官營"),
+      p("imperial-exam", "科舉制", "institutions", 1, 605, 1905, "科舉"),
+      p("grand-canal", "大運河與漕運", "institutions", 2, 605, 1855, "京杭大運河"),
+      p("equal-field", "均田制", "institutions", 2, 485, 780, "均田制"),
+      p("two-tax", "兩稅法", "institutions", 2, 780, 1069, "兩稅法"),
+      p("wang-anshi", "王安石變法", "institutions", 2, 1069, 1085, "王安石變法"),
+      p("one-whip", "一條鞭法", "institutions", 2, 1581, 1723, "一條鞭法"),
+      p("silver-economy", "白銀貨幣化", "institutions", 0, 1500, 1800, "白銀資本"),
+      p("canton-system", "廣州一口通商", "global", 1, 1757, 1842, "廣州十三行"),
+      p("treaty-ports", "條約口岸體系", "global", 1, 1842, 1943, "通商口岸"),
+      p("fabi", "民國法幣", "institutions", 0, 1935, 1948, "法幣"),
+      p("new-policies", "清末新政", "institutions", 2, 1901, 1911, "清末新政"),
+
+      p("chu-han-war", "楚漢戰爭", "wars", 0, -206, -202, "楚漢戰爭"),
+      p("yellow-turban", "黃巾之亂", "wars", 0, 184, 205, "黃巾之亂"),
+      p("an-lushan", "安史之亂", "wars", 0, 755, 763, "安史之亂"),
+      p("mongol-song-war", "宋元戰爭", "wars", 0, 1235, 1279, "宋元战争"),
+      p("ming-qing-war", "明清戰爭", "wars", 0, 1618, 1683, "明清戰爭"),
+      p("opium-wars", "鴉片戰爭與條約體系", "wars", 0, 1839, 1860, "鴉片戰爭"),
+      p("xinhai", "辛亥革命", "wars", 0, 1911, 1912, "辛亥革命"),
+      p("warlord-era", "軍閥混戰", "wars", 1, 1916, 1928, "軍閥割據時期"),
+      p("civil-war", "國共內戰", "wars", 0, 1927, 1949, "國共內戰")
+    ];
+
+    const events = [
+      ce("zhou-east", "平王東遷", -770, "平王東遷"),
+      e("muye", "牧野之戰", -1046, "wars", 0, "牧野之戰"),
+      e("guoren", "國人暴動", -841, "wars", 0, "國人暴動"),
+      e("gongshu-duan", "鄭伯克段於鄢", -722, "parallel", 12, "鄭伯克段於鄢"),
+      e("zhou-zheng", "周鄭交質", -720, "parallel", 12, "周鄭交質"),
+      e("ru-ge", "繻葛之戰", -707, "wars", 0, "繻葛之戰"),
+      e("chu-king", "楚武王稱王", -704, "parallel", 4, "楚武王"),
+      e("guan-zhong", "管仲相齊", -685, "parallel", 1, "管仲"),
+      e("shaoling", "召陵之盟", -656, "parallel", 1, "召陵之盟"),
+      e("chengpu", "城濮之戰", -632, "wars", 0, "城濮之戰"),
+      e("yao-battle", "殽之戰", -627, "wars", 0, "殽之戰"),
+      e("bi-battle", "邲之戰", -597, "wars", 0, "邲之戰"),
+      e("first-peace", "弭兵會盟", -579, "parallel", 5, "弭兵會盟"),
+      e("wu-chu-ying", "吳破楚入郢", -506, "wars", 0, "柏舉之戰"),
+      e("confucius-travel", "孔子周遊列國", -497, "thought", 0, "孔子周遊列國"),
+      e("goujian", "越滅吳", -473, "parallel", 7, "勾踐"),
+      e("confucius", "孔子活動", -551, "thought", 0, "孔子"),
+      e("zuozhuan", "《左傳》所記春秋敘事", -500, "thought", 0, "左傳"),
+      e("jin-partition", "三家分晉", -403, "parallel", 0, "三家分晉"),
+      e("zhizhi-fall", "韓趙魏滅智氏", -453, "parallel", 2, "三家分晉"),
+      e("tian-qi", "田氏代齊", -386, "parallel", 1, "田氏代齊"),
+      e("shang-yang", "商鞅變法", -356, "institutions", 0, "商鞅變法"),
+      e("mencius", "孟子活動", -320, "thought", 0, "孟子"),
+      e("guiling", "桂陵之戰", -354, "wars", 0, "桂陵之戰"),
+      e("maling", "馬陵之戰", -342, "wars", 0, "馬陵之戰"),
+      e("hangu318", "函谷關之戰", -318, "wars", 0, "函谷關之戰"),
+      e("hufu", "胡服騎射", -307, "parallel", 9, "胡服騎射"),
+      e("qi-destroy-song", "齊滅宋", -286, "parallel", 1, "宋國"),
+      e("yan-qi", "樂毅伐齊", -284, "wars", 0, "樂毅伐齊之戰"),
+      e("qu-yuan", "屈原投江", -278, "thought", 0, "屈原"),
+      e("changping", "長平之戰", -260, "wars", 0, "長平之戰"),
+      ce("zhou-fall", "周朝滅亡", -256, "周朝"),
+      e("qin-destroy-han", "秦滅韓", -230, "parallel", 11, "秦滅六國之戰"),
+      e("qin-destroy-zhao", "秦滅趙", -228, "parallel", 9, "秦滅六國之戰"),
+      e("qin-destroy-wei", "秦滅魏", -225, "parallel", 10, "秦滅六國之戰"),
+      e("qin-destroy-chu", "秦滅楚", -223, "parallel", 4, "秦滅六國之戰"),
+      e("qin-destroy-yan", "秦滅燕", -222, "parallel", 8, "秦滅六國之戰"),
+      ce("qin-unify", "秦統一六國", -221, "秦滅六國之戰"),
+      e("burn-books", "焚書坑儒", -213, "thought", 0, "焚書坑儒"),
+      e("daze", "陳勝吳廣起義", -209, "wars", 0, "大澤鄉起義"),
+      e("gaixia", "垓下之戰", -202, "wars", 0, "垓下之戰"),
+      e("baideng", "白登之圍", -200, "frontier", 0, "白登之圍"),
+
+      ce("wenjing", "文景之治", -180, "文景之治"),
+      e("sima-born", "司馬遷生年", -145, "thought", 1, "司馬遷", "《史記》的作者司馬遷約生於西元前145年。"),
+      e("dong-zhongshu", "獨尊儒術", -136, "thought", 0, "罷黜百家，獨尊儒術"),
+      e("zhangqian", "張騫出使西域", -138, "global", 0, "張騫"),
+      e("silk-road-open", "絲路交通展開", -130, "global", 0, "絲綢之路"),
+      ce("han-wudi", "漢武帝即位", -141, "漢武帝"),
+      e("mobei", "漠北之戰", -119, "wars", 0, "漠北之戰"),
+      e("western-protectorate", "西域都護設置", -60, "frontier", 1, "西域都護府"),
+      e("taichu", "太初曆頒行", -104, "institutions", 1, "太初曆"),
+      e("wuzhu", "五銖錢通行", -118, "institutions", 0, "五銖"),
+      e("liling", "李陵之禍", -99, "thought", 1, "李陵之禍", "司馬遷因替李陵辯護而受宮刑，之後完成《史記》。"),
+      e("shiji-finish", "《史記》大致完成", -91, "thought", 1, "史記"),
+      e("salt-iron", "鹽鐵論", -81, "institutions", 1, "鹽鐵論"),
+      ce("wangmang", "王莽篡漢", 9, "王莽"),
+      ce("guangwu", "光武中興", 25, "光武中興"),
+      e("paper", "蔡倫改良造紙", 105, "institutions", 1, "蔡倫"),
+      e("buddhism-arrival", "佛教入華", 65, "global", 1, "佛教傳入漢地"),
+      e("yellow-turban-event", "黃巾之亂爆發", 184, "wars", 0, "黃巾之亂"),
+      e("dongzhuo", "董卓入洛陽", 189, "wars", 0, "董卓討伐戰"),
+      e("guandu", "官渡之戰", 200, "wars", 0, "官渡之戰"),
+      e("red-cliffs", "赤壁之戰", 208, "wars", 0, "赤壁之戰"),
+      e("wei-founded", "曹丕稱帝", 220, "parallel", 0, "曹丕"),
+      e("shu-founded", "劉備稱帝", 221, "parallel", 1, "劉備"),
+      e("wu-founded", "孫權稱帝", 229, "parallel", 2, "孫權"),
+      ce("jin-unify", "西晉滅吳", 280, "晉滅吳之戰"),
+      e("eight-princes", "八王之亂", 291, "wars", 0, "八王之亂"),
+      e("liu-yuan", "劉淵建漢", 304, "parallel", 2, "漢趙"),
+      e("yongjia", "永嘉之亂", 311, "wars", 0, "永嘉之亂"),
+      ce("eastern-jin-founded", "東晉建立", 317, "東晉"),
+      e("later-zhao-event", "石勒建後趙", 319, "parallel", 4, "石勒"),
+      e("former-qin-event", "苻健建前秦", 351, "parallel", 7, "前秦"),
+      e("fei-river", "淝水之戰", 383, "wars", 0, "淝水之戰"),
+      e("later-yan-event", "慕容垂建後燕", 384, "parallel", 9, "後燕"),
+      e("northern-wei-founded", "拓跋珪建北魏", 386, "parallel", 10, "道武帝"),
+      e("xia-founded", "赫連勃勃建夏", 407, "parallel", 16, "赫連勃勃"),
+      e("liu-song-founded", "劉裕代晉建宋", 420, "parallel", 0, "劉宋"),
+      e("northern-wei-unify", "北魏統一北方", 439, "parallel", 10, "北魏統一北方"),
+      e("xiaowen", "北魏孝文帝改革", 494, "institutions", 0, "北魏孝文帝改革"),
+      e("kumarajiva", "鳩摩羅什譯經", 401, "global", 1, "鳩摩羅什"),
+      e("liang-founded", "蕭衍建梁", 502, "parallel", 2, "梁武帝"),
+      e("wei-split", "北魏分裂為東西魏", 534, "parallel", 10, "北魏"),
+      e("houjing", "侯景之亂", 548, "wars", 0, "侯景之亂"),
+      e("northern-zhou-qi", "北周滅北齊", 577, "parallel", 14, "北周滅北齊之戰"),
+      ce("sui-unify", "隋滅陳統一", 589, "隋滅陳之戰"),
+      e("imperial-exam-start", "進士科形成", 605, "institutions", 1, "科舉"),
+      e("grand-canal-event", "隋修大運河", 605, "institutions", 2, "京杭大運河"),
+      ce("tang-founded", "唐朝建立", 618, "唐朝"),
+      e("xuanwu", "玄武門之變", 626, "wars", 0, "玄武門之變", "李世民發動政變，之後即位為唐太宗。"),
+      ce("zhenguan", "貞觀之治", 627, "貞觀之治"),
+      ce("wu-empress", "武則天稱帝", 690, "武則天"),
+      ce("zhou-name", "國號改周", 690, "武周"),
+      e("shenlong", "神龍政變", 705, "wars", 0, "神龍政變"),
+      e("jinglong-coup", "景龍之變", 707, "wars", 0, "景龍之變", "太子李重俊發動兵變，誅武三思父子，事敗被殺。"),
+      e("tanglong-coup", "唐隆政變", 710, "wars", 0, "唐隆政變", "李隆基、太平公主等誅韋后集團，擁立唐睿宗。"),
+      e("xuanzang", "玄奘赴印度取經", 629, "global", 1, "玄奘"),
+      e("nestorian", "景教入華", 635, "global", 1, "大秦景教流行中國碑"),
+      ce("kaiyuan", "開元盛世", 713, "開元盛世"),
+      e("xiantian-coup", "先天政變", 713, "wars", 0, "先天政變", "唐玄宗誅太平公主黨羽，確立皇權。"),
+      e("anlushan-event", "安史之亂爆發", 755, "wars", 0, "安史之亂"),
+      e("mawei", "馬嵬驛兵變", 756, "wars", 0, "馬嵬驛兵變"),
+      e("tibet-changan", "吐蕃攻入長安", 763, "frontier", 1, "吐蕃攻佔長安"),
+      e("talas", "怛羅斯戰役", 751, "global", 0, "怛羅斯戰役"),
+      e("two-tax-event", "兩稅法實施", 780, "institutions", 2, "兩稅法"),
+      e("jingyuan-mutiny", "涇原兵變", 783, "wars", 0, "涇原兵變"),
+      e("yongzhen", "永貞革新", 805, "institutions", 2, "永貞革新"),
+      e("niu-li", "牛李黨爭", 821, "thought", 0, "牛李黨爭", "中晚唐士大夫政治派系鬥爭的代表。"),
+      e("ganlu", "甘露之變", 835, "wars", 0, "甘露之變", "唐文宗與李訓、鄭注等誅宦官失敗，宦官勢力加強。"),
+      e("huichang", "會昌毀佛", 845, "thought", 0, "會昌毀佛"),
+      e("huangchao", "黃巢之亂", 875, "wars", 0, "黃巢之亂"),
+      ce("tang-fall", "朱溫篡唐", 907, "朱溫"),
+      e("later-liang-founded", "後梁建立", 907, "parallel", 3, "後梁"),
+      e("later-tang-founded", "後唐取代後梁", 923, "parallel", 3, "後唐"),
+      e("later-jin-founded", "後晉建立", 936, "parallel", 3, "後晉"),
+      e("sixteen-prefectures", "割讓燕雲十六州", 936, "frontier", 0, "燕雲十六州"),
+      e("later-han-founded", "後漢建立", 947, "parallel", 3, "後漢_(五代)"),
+      e("later-zhou-founded", "後周建立", 951, "parallel", 3, "後周"),
+      e("zhou-shizong", "周世宗改革與北伐", 955, "parallel", 3, "柴榮"),
+      e("yangwu-to-nantang", "南唐取代楊吳", 937, "parallel", 4, "南唐"),
+      e("min-fall", "閩國滅亡", 945, "parallel", 6, "閩國"),
+      e("chu-fall", "馬楚內亂與滅亡", 951, "parallel", 7, "楚_(十國)"),
+      e("southern-han-fall", "宋滅南漢", 971, "parallel", 9, "南漢"),
+      e("southern-tang-fall", "宋滅南唐", 975, "parallel", 4, "南唐"),
+      e("wuyue-submit", "吳越納土歸宋", 978, "parallel", 10, "吳越"),
+      e("northern-han-fall", "宋滅北漢", 979, "parallel", 9, "北漢"),
+
+      ce("chenqiao", "陳橋兵變", 960, "陳橋兵變"),
+      e("song-cup", "杯酒釋兵權", 961, "institutions", 0, "杯酒釋兵權"),
+      e("qingli", "慶曆新政", 1043, "institutions", 2, "慶曆新政"),
+      e("wang-anshi-event", "王安石變法開始", 1069, "institutions", 2, "王安石變法"),
+      e("chanyuan", "澶淵之盟", 1005, "parallel", 11, "澶淵之盟"),
+      e("song-xia-war", "宋夏戰爭", 1040, "parallel", 12, "宋夏戰爭"),
+      e("haishang", "海上之盟", 1120, "parallel", 13, "海上之盟"),
+      e("jin-destroy-liao", "金滅遼", 1125, "parallel", 13, "金滅遼之戰"),
+      e("jingkang", "靖康之變", 1127, "wars", 0, "靖康之變"),
+      e("xiangyang", "襄陽之戰", 1267, "wars", 0, "襄陽之戰"),
+      ce("yuan-founded", "忽必烈建元", 1271, "忽必烈"),
+      e("yashan", "崖山海戰", 1279, "wars", 0, "崖山海戰"),
+      e("red-turban", "紅巾軍起義", 1351, "wars", 0, "紅巾軍起義"),
+      ce("ming-founded", "明朝建立", 1368, "明朝"),
+      e("jingnan-campaign", "靖難之役", 1399, "wars", 0, "靖難之役"),
+      e("zhenghe", "鄭和下西洋", 1405, "global", 1, "鄭和下西洋"),
+      e("haijin", "明初海禁", 1371, "global", 1, "海禁"),
+      e("tumu", "土木堡之變", 1449, "wars", 0, "土木堡之變"),
+      e("tumu-frontier", "瓦剌俘明英宗", 1449, "frontier", 1, "土木堡之變"),
+      e("gengxu", "庚戌之變", 1550, "frontier", 1, "庚戌之變"),
+      e("wang-yangming", "王陽明龍場悟道", 1508, "thought", 0, "王陽明"),
+      e("zhang-juzheng", "張居正改革", 1572, "institutions", 2, "張居正改革"),
+      e("one-whip-event", "一條鞭法推行", 1581, "institutions", 2, "一條鞭法"),
+      e("longqing-open", "隆慶開關", 1567, "global", 1, "隆慶開關"),
+      e("matteo-ricci", "利瑪竇入華", 1582, "global", 1, "利瑪竇"),
+      e("wanli-korea", "萬曆朝鮮之役", 1592, "wars", 0, "萬曆朝鮮之役"),
+      e("dutch-taiwan", "荷蘭進入大員", 1624, "taiwan", 0, "荷屬福爾摩沙"),
+      e("spanish-taiwan", "西班牙佔北台灣", 1626, "taiwan", 1, "西班牙福爾摩沙"),
+      e("nurhaci", "努爾哈赤起兵", 1618, "frontier", 0, "努爾哈赤"),
+      e("sarhu", "薩爾滸之戰", 1619, "frontier", 0, "薩爾滸之戰"),
+      e("ningyuan", "寧遠之戰", 1626, "frontier", 0, "寧遠之戰"),
+      e("dutch-expel-spanish", "荷蘭逐西班牙", 1642, "taiwan", 1, "西班牙福爾摩沙"),
+      e("li-zicheng", "李自成入北京", 1644, "wars", 0, "李自成"),
+      e("dashun-founded", "大順入北京", 1644, "parallel", 1, "大順_(政權)"),
+
+      ce("shunzhi-pass", "清軍入關", 1644, "清兵入塞"),
+      e("nanming", "南明抗清", 1644, "parallel", 1, "南明"),
+      e("hongguang-founded", "弘光政權建立", 1644, "parallel", 3, "弘光帝"),
+      e("daxi-founded", "大西政權", 1644, "parallel", 2, "大西"),
+      e("longwu-founded", "隆武政權建立", 1645, "parallel", 4, "隆武帝"),
+      e("yongli-founded", "永曆政權建立", 1646, "parallel", 5, "永曆帝"),
+      e("koxinga-taiwan", "鄭成功攻台", 1661, "taiwan", 0, "鄭成功攻臺之役"),
+      e("yongli-end", "永曆帝遇害", 1662, "parallel", 5, "永曆帝"),
+      e("dutch-surrender", "荷蘭退出台灣", 1662, "taiwan", 0, "熱蘭遮城圍城戰"),
+      ce("kangxi", "康熙親政", 1669, "康熙帝"),
+      e("three-feudatories", "三藩之亂", 1673, "wars", 0, "三藩之亂"),
+      e("taiwan-qing", "清納台灣", 1683, "taiwan", 0, "澎湖海戰"),
+      e("taiwan-prefecture", "設臺灣府", 1684, "taiwan", 0, "臺灣府"),
+      ce("kangqian", "康雍乾盛世", 1684, "康雍乾盛世"),
+      e("nerchinsk", "尼布楚條約", 1689, "frontier", 0, "尼布楚條約"),
+      e("tibet-qing", "清軍入藏", 1720, "frontier", 0, "清朝治藏歷史"),
+      e("kaozheng-event", "乾嘉考據興盛", 1760, "thought", 1, "乾嘉學派"),
+      e("dzungar", "平定準噶爾", 1755, "frontier", 0, "清滅準噶爾"),
+      e("aigun", "璦琿條約", 1858, "frontier", 1, "璦琿條約"),
+      e("peking-1860", "北京條約割讓外東北", 1860, "frontier", 1, "北京條約"),
+      e("ili-crisis", "伊犁危機", 1871, "frontier", 1, "伊犁危機"),
+      e("siku", "《四庫全書》纂修", 1772, "thought", 1, "四庫全書"),
+      e("canton-system-event", "廣州一口通商", 1757, "global", 1, "廣州十三行"),
+      e("taiwan-province", "臺灣建省", 1885, "taiwan", 1, "福建臺灣省"),
+      e("macartney", "馬戛爾尼使團", 1793, "wars", 0, "馬戛爾尼使團"),
+      e("white-lotus", "白蓮教起義", 1796, "wars", 0, "川楚教亂"),
+      e("opium", "第一次鴉片戰爭", 1839, "wars", 0, "第一次鴉片戰爭"),
+      e("nanjing-treaty", "南京條約", 1842, "wars", 0, "南京條約"),
+      e("treaty-ports-event", "五口通商", 1842, "global", 1, "五口通商"),
+      e("taiping-event", "太平天國起事", 1851, "parallel", 1, "金田起義"),
+      e("self-strengthening", "洋務運動", 1861, "institutions", 2, "洋務運動"),
+      ce("tongzhi", "同治中興", 1862, "同治中興"),
+      e("zongli", "總理衙門設立", 1861, "institutions", 2, "總理各國事務衙門"),
+      e("maritime-customs", "海關總稅務司", 1863, "institutions", 2, "海關總稅務司"),
+      e("sino-japanese", "甲午戰爭", 1894, "wars", 0, "甲午戰爭"),
+      e("taiwan-ceded", "馬關條約割台", 1895, "taiwan", 0, "馬關條約"),
+      e("triple-intervention", "三國干涉還遼", 1895, "global", 1, "三國干涉還遼"),
+      e("republic-formosa", "臺灣民主國", 1895, "taiwan", 1, "臺灣民主國"),
+      e("japanese-rule-start", "日治開始", 1895, "taiwan", 0, "臺灣日治時期"),
+      e("hundred-days", "戊戌變法", 1898, "institutions", 2, "戊戌變法"),
+      e("boxer", "庚子事變", 1900, "wars", 0, "義和團運動"),
+      e("boxer-protocol", "辛丑條約", 1901, "global", 1, "辛丑條約"),
+      e("new-policy-event", "清末新政", 1901, "institutions", 2, "清末新政"),
+      e("exam-end", "廢除科舉", 1905, "institutions", 1, "科舉"),
+      e("tongmenghui", "同盟會成立", 1905, "thought", 0, "中國同盟會"),
+      e("constitutional-prep", "預備立憲", 1906, "institutions", 2, "預備立憲"),
+      e("russo-japanese", "日俄戰爭", 1904, "global", 1, "日俄戰爭"),
+      ce("xuantong", "宣統帝即位", 1908, "宣統帝"),
+      e("railway", "保路運動", 1911, "wars", 0, "保路運動"),
+      e("wuchang", "武昌起義", 1911, "wars", 0, "武昌起義"),
+
+      e("roc-founded", "中華民國成立", 1912, "parallel", 14, "中華民國臨時政府_(南京)"),
+      ce("abdication", "清帝退位", 1912, "清帝退位"),
+      e("song-jiaoren", "宋教仁遇刺", 1913, "parallel", 14, "宋教仁案"),
+      e("second-rev", "二次革命", 1913, "parallel", 14, "二次革命"),
+      e("twenty-one", "二十一條要求", 1915, "wars", 1, "二十一條"),
+      e("yuan-emperor", "袁世凱稱帝", 1915, "parallel", 14, "洪憲帝制"),
+      e("national-protection", "護國戰爭", 1915, "wars", 1, "護國戰爭"),
+      e("warlord-start", "軍閥割據加劇", 1916, "parallel", 15, "軍閥割據時期"),
+      e("府院之爭", "府院之爭", 1917, "parallel", 15, "府院之爭"),
+      e("duan-qirui", "段祺瑞執政與參戰問題", 1917, "parallel", 15, "段祺瑞"),
+      e("zhangxun", "張勳復辟", 1917, "parallel", 15, "張勳復辟"),
+      e("ww1-china", "中國對德奧宣戰", 1917, "global", 1, "中國參與第一次世界大戰"),
+      e("paris", "巴黎和會山東問題", 1919, "global", 1, "巴黎和會"),
+      e("may-fourth", "五四運動", 1919, "thought", 0, "五四運動"),
+      e("new-culture-event", "《新青年》與新文化", 1915, "thought", 0, "新青年"),
+      e("comintern", "共產國際影響中國革命", 1920, "global", 0, "共產國際"),
+      e("ccp-founded", "中共成立", 1921, "parallel", 16, "中國共產黨第一次全國代表大會"),
+      e("first-front", "第一次國共合作", 1924, "parallel", 16, "第一次國共合作"),
+      e("whampoa", "黃埔軍校成立", 1924, "institutions", 2, "黃埔軍校"),
+      e("may-thirtieth", "五卅運動", 1925, "wars", 1, "五卅運動"),
+      e("northern-expedition", "北伐", 1926, "wars", 1, "國民革命軍北伐"),
+      e("shanghai-412", "四一二事件", 1927, "wars", 1, "四一二事件"),
+      e("nanjing-government", "南京國民政府成立", 1927, "parallel", 14, "南京國民政府"),
+      e("nanchang", "南昌起義", 1927, "parallel", 16, "南昌起義"),
+      e("jinggangshan", "井岡山根據地", 1927, "parallel", 16, "井岡山革命根據地"),
+      e("northeast-flag", "東北易幟", 1928, "parallel", 15, "東北易幟"),
+      e("central-plains-war", "中原大戰", 1930, "wars", 1, "中原大戰"),
+      e("fabi-reform", "法幣改革", 1935, "institutions", 0, "法幣改革"),
+      e("encirclement", "剿共戰爭開始", 1930, "wars", 1, "第一次圍剿戰爭"),
+      e("sept18", "九一八事變", 1931, "wars", 0, "九一八事變"),
+      e("manchukuo-event", "滿洲國成立", 1932, "parallel", 17, "滿洲國"),
+      e("wushe", "霧社事件", 1930, "taiwan", 0, "霧社事件"),
+      e("long-march", "長征", 1934, "parallel", 16, "長征"),
+      e("xian", "西安事變", 1936, "wars", 0, "西安事變"),
+      e("lugou", "七七事變", 1937, "wars", 0, "七七事變"),
+      e("nanjing-massacre", "南京大屠殺", 1937, "wars", 0, "南京大屠殺"),
+      e("second-front", "第二次國共合作", 1937, "parallel", 16, "第二次國共合作"),
+      e("wuhan-fall", "武漢會戰", 1938, "wars", 0, "武漢會戰"),
+      e("yanan-rectification", "延安整風", 1942, "thought", 0, "延安整風運動"),
+      e("cairo", "開羅宣言", 1943, "global", 1, "開羅宣言"),
+      e("japan-surrender", "日本投降與抗戰勝利", 1945, "wars", 0, "日本投降"),
+      e("un", "聯合國成立", 1945, "global", 1, "联合国"),
+      e("double-ten", "雙十協定", 1945, "parallel", 14, "雙十協定"),
+      e("full-civil-war", "全面國共內戰", 1946, "wars", 0, "第二次國共內戰"),
+      e("constitution-1947", "中華民國憲法施行", 1947, "institutions", 2, "中華民國憲法"),
+      e("chiang-resign-1949", "蔣中正下野", 1949, "parallel", 14, "蔣中正"),
+      e("three-campaigns", "三大戰役結束", 1949, "wars", 0, "三大戰役"),
+      ce("prc-founded", "中華人民共和國成立", 1949, "中華人民共和國開國大典"),
+      e("roc-taiwan-event", "國民政府遷台", 1949, "taiwan", 0, "中華民國政府遷台"),
+      e("feb28", "二二八事件", 1947, "taiwan", 0, "二二八事件"),
+      e("martial-law-taiwan", "台灣戒嚴", 1949, "taiwan", 1, "臺灣省戒嚴令"),
+      e("korean-war", "韓戰與中國參戰", 1950, "global", 1, "抗美援朝"),
+      e("sino-soviet-treaty", "中蘇友好同盟互助條約", 1950, "global", 1, "中蘇友好同盟互助條約"),
+      e("land-reform-prc", "土地改革", 1950, "institutions", 2, "土地改革运动"),
+      e("first-five-year", "第一個五年計畫", 1953, "institutions", 2, "第一個五年計劃_(中國)"),
+      e("bandung", "萬隆會議", 1955, "global", 1, "萬隆會議"),
+      e("taiwan-strait-1958", "第二次台海危機", 1958, "global", 1, "第二次台灣海峽危機"),
+      e("hundred-flowers", "百花齊放與反右", 1957, "thought", 0, "反右運動"),
+      e("great-leap", "大躍進", 1958, "institutions", 2, "大躍進"),
+      e("sino-soviet-split", "中蘇交惡", 1960, "global", 0, "中蘇交惡"),
+      e("china-nuclear", "中國首次核試驗", 1964, "global", 1, "596工程"),
+      e("cultural-revolution", "文化大革命", 1966, "wars", 1, "文化大革命"),
+      e("zhenbao", "珍寶島事件", 1969, "frontier", 1, "珍寶島事件"),
+      e("un-seat", "中國恢復聯合國席位", 1971, "global", 1, "聯合國大會第2758號決議"),
+      e("nixon", "尼克森訪華", 1972, "global", 1, "1972年尼克松访华"),
+      ce("mao-death", "毛澤東逝世", 1976, "毛澤東"),
+      ce("reform", "改革開放", 1978, "改革開放"),
+      e("sino-us-normalization", "中美建交", 1979, "global", 1, "中美建交"),
+      e("sino-vietnamese-war", "中越戰爭", 1979, "frontier", 1, "中越戰爭"),
+      e("special-zones", "經濟特區設立", 1980, "institutions", 2, "经济特区"),
+      e("tiananmen-1989", "八九民運", 1989, "wars", 1, "八九民運"),
+      e("martial-law-lifted", "解除戒嚴", 1987, "taiwan", 1, "臺灣省戒嚴令"),
+      e("taiwan-direct-election", "首次總統直選", 1996, "taiwan", 1, "1996年中華民國總統選舉"),
+      ce("southern-tour", "鄧小平南巡", 1992, "鄧小平南巡"),
+      e("asian-financial-crisis", "亞洲金融危機", 1997, "global", 1, "亞洲金融危機"),
+      e("hong-kong", "香港回歸", 1997, "global", 1, "香港回歸"),
+      e("macau", "澳門回歸", 1999, "global", 1, "澳門回歸"),
+      e("wto", "加入世界貿易組織", 2001, "global", 0, "中國加入世界貿易組織"),
+      e("sars", "SARS 疫情", 2003, "global", 0, "SARS事件"),
+      e("beijing-olympics", "北京奧運", 2008, "global", 0, "2008年夏季奧林匹克運動會"),
+      e("global-financial-crisis", "全球金融危機", 2008, "global", 1, "2007年－2008年環球金融危機"),
+      e("belt-road", "一帶一路提出", 2013, "global", 0, "一帶一路"),
+      e("covid", "COVID-19 疫情", 2019, "global", 0, "2019冠狀病毒病疫情")
+    ];
+
+    const trackById = new Map(tracks.map((track, index) => [track.id, { ...track, index }]));
+    const canvas = document.getElementById("timeline");
+    const app = document.getElementById("app");
+    const ctx = canvas.getContext("2d");
+    const minimap = document.getElementById("minimap");
+    const mctx = minimap.getContext("2d");
+    const tooltip = document.getElementById("tooltip");
+    const searchInput = document.getElementById("searchInput");
+    const suggestions = document.getElementById("suggestions");
+    const eventPanel = document.getElementById("eventPanel");
+    const eventPanelToggle = document.getElementById("eventPanelToggle");
+    const eventList = document.getElementById("eventList");
+    const eventPanelTitle = document.getElementById("eventPanelTitle");
+    const minimapPanel = document.getElementById("minimapPanel");
+    const minimapToggle = document.getElementById("minimapToggle");
+    const rangeSelect = document.getElementById("rangeSelect");
+    const mobilePrevTrack = document.getElementById("mobilePrevTrack");
+    const mobileNextTrack = document.getElementById("mobileNextTrack");
+    const mobileTrackLabel = document.getElementById("mobileTrackLabel");
+
+    let layout = [];
+    let hits = [];
+    let fixedHits = [];
+    let axisHits = [];
+    let hovered = null;
+    const hiddenTracks = new Set();
+    let isDragging = false;
+    let miniDragging = false;
+    let dragMoved = false;
+    let dragStart = { x: 0, y: 0, tx: 0, ty: 0 };
+    let mobileTrackIndex = 0;
+    const viewport = { dpr: 1, width: 0, height: 0, tx: 0, ty: 0, scale: .28, minScale: .12, maxScale: 3.6 };
+
+    function computeLayout() {
+      setResponsiveMetrics();
+      let x = WORLD.left;
+      const visibleTracks = tracks.filter(track => !hiddenTracks.has(track.id));
+      layout = visibleTracks.map(track => {
+        const width = track.width || WORLD.trackWidth;
+        const box = { ...track, x, width, right: x + width };
+        x += width + WORLD.gap;
+        return box;
+      });
+      WORLD.width = WORLD.left + WORLD.right + layout.reduce((sum, track) => sum + track.width, 0) + Math.max(0, visibleTracks.length - 1) * WORLD.gap;
+      WORLD.totalHeight = WORLD.top + WORLD.height + WORLD.bottom;
+    }
+
+    function setResponsiveMetrics() {
+      const mobile = viewport.width > 0 && viewport.width < 760;
+      WORLD.left = mobile ? 252 : 400;
+      RULER_AXIS.x = mobile ? 78 : 82;
+      RULER_AXIS.width = mobile ? 58 : 94;
+      CORE_AXIS.x = mobile ? 146 : 190;
+      CORE_AXIS.width = mobile ? 92 : 168;
+    }
+
+    function applyTimeRange(rangeId, keepCenter = false) {
+      const next = timeRanges.find(range => range.id === rangeId) || timeRanges[0];
+      const center = keepCenter ? yToYear(screenToWorld(0, viewport.height / 2).y) : next.focus;
+      activeRange = next;
+      YEAR_MIN = next.min;
+      YEAR_MAX = next.max;
+      TIME_SEGMENTS = (next.segments || [{ start: next.min, end: next.max, weight: next.max >= 1900 ? 7 : 1 }])
+        .map(segment => ({
+          start: Math.max(next.min, segment.start),
+          end: Math.min(next.max, segment.end),
+          weight: segment.weight
+        }))
+        .filter(segment => segment.end > segment.start);
+      if (!TIME_SEGMENTS.length) TIME_SEGMENTS = [{ start: next.min, end: next.max, weight: 1 }];
+      rangeSelect.value = next.id;
+      const focus = Math.min(YEAR_MAX, Math.max(YEAR_MIN, center));
+      focusWorld(WORLD.left, yearToY(focus), viewport.width < 760 ? Math.max(viewport.scale, .82) : Math.max(viewport.scale, .72));
+    }
+
+    function itemSpan(item) {
+      if (typeof item.year === "number") return { start: item.year, end: item.year };
+      return { start: item.start, end: item.end };
+    }
+
+    function rangeContains(span, range = activeRange) {
+      return span.start >= range.min && span.end <= range.max;
+    }
+
+    function bestRangeForItem(item) {
+      const span = itemSpan(item);
+      return timeRanges.find(range => span.start >= range.min && span.end <= range.max) || timeRanges[0];
+    }
+
+    function ensureRangeForItem(item) {
+      const span = itemSpan(item);
+      if (rangeContains(span)) return;
+      applyTimeRange(bestRangeForItem(item).id);
+    }
+
+    function trackInfo(id) { return layout.find(track => track.id === id); }
+    function timeUnitsTotal() {
+      return TIME_SEGMENTS.reduce((sum, segment) => sum + (segment.end - segment.start) * segment.weight, 0);
+    }
+
+    function unitsBeforeYear(year) {
+      const clamped = Math.min(YEAR_MAX, Math.max(YEAR_MIN, year));
+      let units = 0;
+      for (const segment of TIME_SEGMENTS) {
+        if (clamped >= segment.end) {
+          units += (segment.end - segment.start) * segment.weight;
+        } else if (clamped > segment.start) {
+          units += (clamped - segment.start) * segment.weight;
+          break;
+        } else {
+          break;
+        }
+      }
+      return units;
+    }
+
+    function yearToY(year) {
+      const t = 1 - unitsBeforeYear(year) / timeUnitsTotal();
+      return WORLD.top + t * WORLD.height;
+    }
+
+    function yToYear(y) {
+      const unitsFromBottom = (1 - ((y - WORLD.top) / WORLD.height)) * timeUnitsTotal();
+      let remaining = unitsFromBottom;
+      for (const segment of TIME_SEGMENTS) {
+        const segmentUnits = (segment.end - segment.start) * segment.weight;
+        if (remaining <= segmentUnits) {
+          return Math.round(segment.start + remaining / segment.weight);
+        }
+        remaining -= segmentUnits;
+      }
+      return YEAR_MAX;
+    }
+
+    function segmentForYear(year) {
+      return TIME_SEGMENTS.find(segment => year >= segment.start && year <= segment.end) || TIME_SEGMENTS[TIME_SEGMENTS.length - 1];
+    }
+
+    function yearPixels(year = yToYear(screenToWorld(0, viewport.height / 2).y)) {
+      return (WORLD.height / timeUnitsTotal()) * segmentForYear(year).weight * viewport.scale;
+    }
+
+    function shouldShowEventText(item) {
+      return item.important || item.year >= 1800 || viewport.scale >= .72 || yearPixels(item.year) > 1.25;
+    }
+
+    function tickSteps() {
+      const px = yearPixels();
+      if (px >= 12) return { major: 10, minor: 1, label: 5 };
+      if (px >= 6) return { major: 25, minor: 5, label: 10 };
+      if (px >= 3) return { major: 50, minor: 10, label: 25 };
+      if (px >= 1.4) return { major: 100, minor: 25, label: 50 };
+      return { major: 250, minor: 50, label: 100 };
+    }
+
+    function stepsForYear(year, mini = false) {
+      if (mini) return { major: 100, minor: 20, label: 100 };
+      if (year >= 1900) {
+        const px = yearPixels(year);
+        if (px >= 22) return { major: 20, minor: 1, label: 5 };
+        if (px >= 10) return { major: 20, minor: 2, label: 10 };
+        return { major: 20, minor: 5, label: 20 };
+      }
+      if (year >= 1800) {
+        const px = yearPixels(year);
+        if (px >= 12) return { major: 20, minor: 2, label: 10 };
+        return { major: 20, minor: 5, label: 20 };
+      }
+      const px = yearPixels(year);
+      if (px >= 12) return { major: 25, minor: 5, label: 10 };
+      if (px >= 6) return { major: 50, minor: 10, label: 25 };
+      if (px >= 3) return { major: 100, minor: 25, label: 50 };
+      if (px >= 1.4) return { major: 250, minor: 50, label: 100 };
+      return { major: 500, minor: 100, label: 500 };
+    }
+    function alignedStart(step) { return Math.ceil(YEAR_MIN / step) * step; }
+    function screenToWorld(x, y) { return { x: (x - viewport.tx) / viewport.scale, y: (y - viewport.ty) / viewport.scale }; }
+
+    function laneBox(item) {
+      const track = trackInfo(item.track);
+      if (!track) return null;
+      const lanes = laneCountForTrack(track.id);
+      const gap = 5;
+      const laneWidth = (track.width - gap * (lanes + 1)) / lanes;
+      const lane = Math.min(item.lane || 0, lanes - 1);
+      return { x: track.x + gap + lane * (laneWidth + gap), width: laneWidth, track, lane };
+    }
+
+    function laneCountForTrack(trackId) {
+      return {
+        parallel: 20,
+        institutions: 3,
+        global: 2,
+        frontier: 2,
+        taiwan: 3,
+        thought: 2,
+        wars: 2
+      }[trackId] || 2;
+    }
+
+    function formatYear(year) {
+      const value = Math.round(year);
+      return value < 0 ? `西元前 ${Math.abs(value)}` : `西元 ${value}`;
+    }
+    function hexToRgba(hex, alpha) {
+      const value = hex.replace("#", "");
+      return `rgba(${parseInt(value.slice(0,2),16)}, ${parseInt(value.slice(2,4),16)}, ${parseInt(value.slice(4,6),16)}, ${alpha})`;
+    }
+    function readableText(hex) {
+      const value = hex.replace("#", "");
+      const r = parseInt(value.slice(0,2),16), g = parseInt(value.slice(2,4),16), b = parseInt(value.slice(4,6),16);
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > .58 ? "#211a12" : "#fff8eb";
+    }
+
+    function roundRect(context, x, y, width, height, radius) {
+      const r = Math.min(radius, width / 2, height / 2);
+      context.beginPath();
+      context.moveTo(x + r, y);
+      context.lineTo(x + width - r, y);
+      context.quadraticCurveTo(x + width, y, x + width, y + r);
+      context.lineTo(x + width, y + height - r);
+      context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+      context.lineTo(x + r, y + height);
+      context.quadraticCurveTo(x, y + height, x, y + height - r);
+      context.lineTo(x, y + r);
+      context.quadraticCurveTo(x, y, x + r, y);
+      context.closePath();
+    }
+
+    function draw() {
+      ctx.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
+      ctx.clearRect(0, 0, viewport.width, viewport.height);
+      fixedHits = [];
+      ctx.save();
+      ctx.translate(viewport.tx, viewport.ty);
+      ctx.scale(viewport.scale, viewport.scale);
+      drawWorld(ctx, false);
+      ctx.restore();
+      drawRulerAxis();
+      drawCoreAxis();
+      drawFixedAxes();
+      drawMinimap();
+      updateEventPanel();
+    }
+
+    function drawWorld(context, mini) {
+      if (!mini) hits = [];
+      context.fillStyle = "#f6ecd8";
+      context.fillRect(0, 0, WORLD.width, WORLD.totalHeight);
+      drawGrid(context, mini);
+      drawTracks(context, mini);
+      drawPeriods(context, mini);
+      drawEvents(context, mini);
+      if (!mini) {
+        context.fillStyle = "#2d2418";
+        context.font = "800 38px 'Microsoft JhengHei', sans-serif";
+        context.fillText("CHINA HISTORY", WORLD.left, 55);
+        context.font = "600 17px 'Microsoft JhengHei', sans-serif";
+        context.fillStyle = "#6f604b";
+        context.fillText("朝代、制度、史學、戰爭與近現代變局", WORLD.left, 78);
+      }
+    }
+
+    function drawGrid(context, mini) {
+      context.textAlign = "right";
+      context.textBaseline = "middle";
+      for (const segment of TIME_SEGMENTS) {
+        const probeYear = Math.max(segment.start, Math.min(segment.end - 1, segment.start + 1));
+        const steps = stepsForYear(probeYear, mini);
+        for (let year = alignedStart(steps.minor); year <= segment.end; year += steps.minor) {
+          if (year < segment.start || year > YEAR_MAX) continue;
+          const y = yearToY(year);
+          const major = year % steps.major === 0;
+          context.strokeStyle = major ? "rgba(61, 48, 31, .28)" : "rgba(61, 48, 31, .09)";
+          context.lineWidth = major ? 1.2 : .7;
+          context.beginPath();
+          context.moveTo(WORLD.left - 12, y);
+          context.lineTo(WORLD.width - WORLD.right + 12, y);
+          context.stroke();
+          // Year labels are drawn by drawFixedAxes in screen space; drawing them
+          // here would scale the text and cause overlap at high zoom.
+        }
+      }
+    }
+
+    function drawTracks(context, mini) {
+      layout.forEach(track => {
+        context.fillStyle = hexToRgba(track.color, mini ? .11 : .075);
+        context.fillRect(track.x, WORLD.top, track.width, WORLD.height);
+        context.strokeStyle = "rgba(42, 32, 20, .24)";
+        context.lineWidth = 1.4;
+        context.strokeRect(track.x, WORLD.top, track.width, WORLD.height);
+        if (!mini) {
+          context.fillStyle = "#2d2418";
+          context.font = "800 17px 'Microsoft JhengHei', sans-serif";
+          context.textAlign = "center";
+          context.textBaseline = "bottom";
+          context.fillText(track.name, track.x + track.width / 2, WORLD.top - 12);
+        }
+      });
+    }
+
+    function drawPeriods(context, mini) {
+      periods.forEach(item => {
+        if (item.end < YEAR_MIN || item.start > YEAR_MAX) return;
+        if (hiddenTracks.has(item.track)) return;
+        const box = laneBox(item);
+        if (!box) return;
+        const y1 = yearToY(item.end);
+        const y2 = yearToY(item.start);
+        const h = Math.max(5, y2 - y1);
+        context.fillStyle = hexToRgba(box.track.color, mini ? .72 : .84);
+        roundRect(context, box.x, y1, box.width, h, mini ? 1 : 4);
+        context.fill();
+        context.strokeStyle = "rgba(35, 27, 18, .45)";
+        context.lineWidth = 1.1;
+        context.stroke();
+        if (!mini) {
+          drawLabel(context, item.name, box, y1, h, box.track.color);
+          hits.push({ type: "period", item, x: box.x, y: y1, w: box.width, h });
+        }
+      });
+    }
+
+    function drawLabel(context, text, box, y, h, color) {
+      if (h < 8 || box.width < 10) return;
+      context.save();
+      context.beginPath();
+      context.rect(box.x + 2, y + 2, box.width - 4, h - 4);
+      context.clip();
+      context.fillStyle = readableText(color);
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      const size = Math.max(9, Math.min(18, Math.min(box.width / Math.max(2, text.length * .78), h / 2.2)));
+      context.font = `800 ${size}px 'Microsoft JhengHei', sans-serif`;
+      if (context.measureText(text).width <= box.width - 8 && h >= size + 8) {
+        context.fillText(text, box.x + box.width / 2, y + h / 2);
+      } else {
+        const vSize = Math.max(8, Math.min(15, Math.min(box.width - 6, h / Math.max(2, text.length) * .95)));
+        drawVerticalText(context, text.length > 5 ? text.slice(0, 5) : text, box.x + box.width / 2, y + h / 2, vSize);
+      }
+      if (h > 78 && box.width > 58) {
+        context.font = "600 9px 'Microsoft JhengHei', sans-serif";
+        context.globalAlpha = .76;
+        const item = periods.find(period => period.name === text);
+        if (item) context.fillText(`${formatYear(item.start)} - ${formatYear(item.end)}`, box.x + box.width / 2, y + h - 10);
+      }
+      context.restore();
+    }
+
+    function drawVerticalText(context, text, x, y, size) {
+      const chars = [...text];
+      const step = size * .9;
+      context.font = `800 ${size}px 'Microsoft JhengHei', sans-serif`;
+      chars.forEach((char, i) => context.fillText(char, x, y - ((chars.length - 1) * step) / 2 + i * step));
+    }
+
+    function drawEvents(context, mini) {
+      const drawItems = [];
+      events.forEach(item => {
+        if (item.core) return;
+        if (item.year < YEAR_MIN || item.year > YEAR_MAX) return;
+        if (hiddenTracks.has(item.track)) return;
+        const box = laneBox(item);
+        if (!box) return;
+        const x = box.x + box.width / 2;
+        const y = yearToY(item.year);
+        drawItems.push({ item, box, x, y });
+      });
+      const clusterData = mini ? { byId: new Map(), clusters: [] } : buildEventLabelClusters(drawItems);
+      drawItems.forEach(({ item, box, x, y }) => {
+        if (!mini && clusterData.byId.has(item.id)) return;
+        const r = mini ? 1.8 : 5.4;
+        context.fillStyle = "#fff2ad";
+        context.strokeStyle = "#332719";
+        context.lineWidth = mini ? .7 : 1.4;
+        context.beginPath();
+        context.arc(x, y, r, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+        if (!mini) hits.push({ type: "event", item, x: x - 9, y: y - 9, w: 18, h: 18 });
+        if (!mini) drawEventLabel(context, item, x, y, box);
+      });
+      if (!mini) clusterData.clusters.forEach(cluster => drawEventCluster(context, cluster));
+    }
+
+    function buildEventLabelClusters(drawItems) {
+      const groups = new Map();
+      drawItems.forEach(entry => {
+        if (!shouldShowEventText(entry.item)) return;
+        const key = `${entry.item.track}:${entry.box.lane}:${Math.round(entry.y / 18)}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(entry);
+      });
+      const byId = new Map();
+      const clusters = [];
+      groups.forEach(group => {
+        if (group.length < 2) return;
+        group.sort((a, b) => b.item.year - a.item.year || a.item.name.localeCompare(b.item.name));
+        const x = group.reduce((sum, entry) => sum + entry.x, 0) / group.length;
+        const y = group.reduce((sum, entry) => sum + entry.y, 0) / group.length;
+        const box = group[0].box;
+        const cluster = { id: `cluster-${clusters.length}`, entries: group, box, x, y };
+        clusters.push(cluster);
+        group.forEach(entry => byId.set(entry.item.id, cluster));
+      });
+      return { byId, clusters };
+    }
+
+    function drawEventLabel(context, item, x, y, box) {
+      const density = yearPixels(item.year);
+      if (!shouldShowEventText(item)) return;
+      const label = item.name.length > 12 ? `${item.name.slice(0, 11)}…` : item.name;
+      context.save();
+      context.font = density > 7 ? "600 11px 'Microsoft JhengHei', sans-serif" : "600 9px 'Microsoft JhengHei', sans-serif";
+      context.fillStyle = "rgba(61, 54, 43, .72)";
+      context.textAlign = "left";
+      context.textBaseline = "middle";
+      const tx = Math.min(box.track.right - 4, x + 8);
+      context.fillText(label, tx, y);
+      context.restore();
+    }
+
+    function drawEventCluster(context, cluster) {
+      const { entries, box, x, y } = cluster;
+      const density = yearPixels(entries[0].item.year);
+      const names = entries.map(entry => entry.item.name);
+      const summaryNames = names.slice(0, 2).join("、");
+      const label = `+${entries.length}: ${summaryNames}${names.length > 2 ? "…" : ""}`;
+      const tx = Math.min(box.track.right - 4, x + 10);
+      const maxWidth = Math.max(36, box.track.right - tx - 4);
+      const text = fitText(context, label, maxWidth);
+      context.save();
+      context.fillStyle = "#fff2ad";
+      context.strokeStyle = "#332719";
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.arc(x, y, 6.5, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      context.font = density > 7 ? "700 11px 'Microsoft JhengHei', sans-serif" : "700 9px 'Microsoft JhengHei', sans-serif";
+      context.fillStyle = "rgba(46, 41, 34, .82)";
+      context.textAlign = "left";
+      context.textBaseline = "middle";
+      context.fillText(text, tx, y);
+      const textWidth = context.measureText(text).width;
+      context.restore();
+      hits.push({ type: "eventCluster", item: entries[0].item, items: entries.map(entry => entry.item), x: x - 10, y: y - 11, w: Math.max(22, tx - x + textWidth + 8), h: 22 });
+    }
+
+    function fitText(context, text, maxWidth) {
+      if (context.measureText(text).width <= maxWidth) return text;
+      let next = text;
+      while (next.length > 4 && context.measureText(`${next}…`).width > maxWidth) next = next.slice(0, -1);
+      return `${next}…`;
+    }
+
+    function drawRulerAxis() {
+      const x = RULER_AXIS.x;
+      const width = RULER_AXIS.width;
+      ctx.save();
+      ctx.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
+      ctx.fillStyle = "rgba(255, 250, 238, .93)";
+      roundRect(ctx, x - 8, 78, width + 16, viewport.height - 128, 8);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(54,42,28,.18)";
+      ctx.stroke();
+
+      ctx.fillStyle = "#2d2418";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "800 13px 'Microsoft JhengHei', sans-serif";
+      ctx.fillText(viewport.width < 760 ? "首腦" : "代表首腦", x + width / 2, 92);
+
+      const visible = rulers
+        .filter(item => item.end >= YEAR_MIN && item.start <= YEAR_MAX)
+        .map(item => ({
+          item,
+          y1: yearToY(item.end) * viewport.scale + viewport.ty,
+          y2: yearToY(item.start) * viewport.scale + viewport.ty
+        }))
+        .filter(entry => entry.y2 >= 78 && entry.y1 <= viewport.height - 40);
+      const dense = buildRulerClusters(visible);
+      visible.forEach(entry => {
+        if (dense.byId.has(entry.item.id)) return;
+        drawRulerBlock(entry.item, x, width, entry.y1, entry.y2);
+      });
+      dense.clusters.forEach(cluster => drawRulerCluster(cluster, x, width));
+      ctx.restore();
+    }
+
+    function drawRulerBlock(item, x, width, y1, y2) {
+      const yy = Math.max(104, y1);
+      const hh = Math.min(viewport.height - 40, y2) - yy;
+      if (hh < 3) return;
+      const color = colorForPolity(item.polity);
+      ctx.fillStyle = hexToRgba(color, item.uncertain ? .58 : .86);
+      roundRect(ctx, x, yy, width, hh, 4);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(35,27,18,.38)";
+      ctx.stroke();
+      if (hh > 12) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x + 2, yy + 2, width - 4, hh - 4);
+        ctx.clip();
+        ctx.fillStyle = readableText(color);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const label = item.uncertain ? `${item.name}?` : item.name;
+        const size = Math.max(8, Math.min(13, Math.min(width / Math.max(2, label.length * .8), hh / 2.2)));
+        ctx.font = `800 ${size}px 'Microsoft JhengHei', sans-serif`;
+        if (ctx.measureText(label).width <= width - 8 && hh >= size + 8) {
+          ctx.fillText(label, x + width / 2, yy + hh / 2);
+        } else {
+          drawVerticalText(ctx, label.slice(0, 4), x + width / 2, yy + hh / 2, Math.min(12, Math.max(8, width - 8)));
+        }
+        if (hh > 42) {
+          ctx.globalAlpha = .82;
+          ctx.font = "600 8px 'Microsoft JhengHei', sans-serif";
+          ctx.fillText(item.title, x + width / 2, yy + hh - 9);
+        }
+        ctx.restore();
+      }
+      fixedHits.push({ type: "ruler", item, x, y: yy, w: width, h: hh });
+    }
+
+    function buildRulerClusters(entries) {
+      const byId = new Map();
+      const clusters = [];
+      const sorted = entries
+        .filter(entry => Math.min(viewport.height - 40, entry.y2) - Math.max(104, entry.y1) < 12)
+        .sort((a, b) => a.y1 - b.y1);
+      let group = [];
+      sorted.forEach(entry => {
+        if (!group.length || Math.abs(entry.y1 - group[group.length - 1].y1) < 18) {
+          group.push(entry);
+        } else {
+          pushRulerGroup(group, clusters, byId);
+          group = [entry];
+        }
+      });
+      pushRulerGroup(group, clusters, byId);
+      return { byId, clusters };
+    }
+
+    function pushRulerGroup(group, clusters, byId) {
+      if (group.length < 2) return;
+      const y = group.reduce((sum, entry) => sum + (entry.y1 + entry.y2) / 2, 0) / group.length;
+      const cluster = { entries: group, y };
+      clusters.push(cluster);
+      group.forEach(entry => byId.set(entry.item.id, cluster));
+    }
+
+    function drawRulerCluster(cluster, x, width) {
+      const items = cluster.entries.map(entry => entry.item).sort((a, b) => b.start - a.start);
+      const names = items.map(item => item.name);
+      const label = `+${items.length}: ${names.slice(0, 2).join("、")}${names.length > 2 ? "…" : ""}`;
+      const y = Math.max(108, Math.min(viewport.height - 44, cluster.y));
+      ctx.fillStyle = "rgba(255,242,173,.96)";
+      ctx.strokeStyle = "#34291b";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(x + width - 10, y, 5.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(46, 41, 34, .84)";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.font = "700 9px 'Microsoft JhengHei', sans-serif";
+      const text = fitText(ctx, label, width - 14);
+      ctx.fillText(text, x + width - 18, y);
+      fixedHits.push({ type: "rulerCluster", item: items[0], items, x, y: y - 11, w: width, h: 22 });
+    }
+
+    function colorForPolity(polity) {
+      const match = coreAxis.find(item => polity.includes(item.name) || item.name.includes(polity));
+      if (match) return match.color;
+      if (polity.includes("民國") || polity.includes("北洋") || polity.includes("南京")) return "#d8793c";
+      if (polity.includes("中華人民共和國")) return "#c94f3b";
+      if (polity.includes("周")) return "#c28a43";
+      return "#bf7650";
+    }
+
+    function drawCoreAxis() {
+      const x = CORE_AXIS.x;
+      const width = CORE_AXIS.width;
+      ctx.save();
+      ctx.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
+      ctx.fillStyle = "rgba(255, 250, 238, .92)";
+      roundRect(ctx, x - 10, 78, width + 20, viewport.height - 128, 8);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(54,42,28,.18)";
+      ctx.stroke();
+
+      ctx.fillStyle = "#2d2418";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "800 13px 'Microsoft JhengHei', sans-serif";
+      ctx.fillText("中原主軸", x + width / 2, 92);
+
+      coreAxis.forEach(item => {
+        if (item.end < YEAR_MIN || item.start > YEAR_MAX) return;
+        const y1 = yearToY(item.end) * viewport.scale + viewport.ty;
+        const y2 = yearToY(item.start) * viewport.scale + viewport.ty;
+        const h = Math.max(4, y2 - y1);
+        if (y2 < 78 || y1 > viewport.height - 40) return;
+        const yy = Math.max(104, y1);
+        const hh = Math.min(viewport.height - 40, y2) - yy;
+        if (hh < 3) return;
+        ctx.fillStyle = hexToRgba(item.color, .92);
+        roundRect(ctx, x, yy, width, hh, 4);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(35,27,18,.45)";
+        ctx.stroke();
+        ctx.fillStyle = readableText(item.color);
+        ctx.font = `800 ${Math.max(10, Math.min(18, hh / 3.2))}px 'Microsoft JhengHei', sans-serif`;
+        if (hh > 20) {
+          ctx.fillText(item.name, x + width / 2, yy + hh / 2);
+        }
+        if (hh > 46 && item.note) {
+          ctx.font = "600 9px 'Microsoft JhengHei', sans-serif";
+          ctx.globalAlpha = .82;
+          ctx.fillText(item.note.slice(0, 16), x + width / 2, yy + hh - 12);
+          ctx.globalAlpha = 1;
+        }
+        fixedHits.push({ type: "core", item, x, y: yy, w: width, h: hh });
+      });
+
+      const coreEventEntries = events
+        .filter(item => item.core)
+        .filter(item => item.year >= YEAR_MIN && item.year <= YEAR_MAX)
+        .map(item => ({ item, y: yearToY(item.year) * viewport.scale + viewport.ty }))
+        .filter(entry => entry.y >= 78 && entry.y <= viewport.height - 40);
+      const coreClusters = buildCoreEventClusters(coreEventEntries);
+      coreEventEntries.forEach(({ item, y }) => {
+        if (coreClusters.byId.has(item.id)) return;
+        if (y < 78 || y > viewport.height - 40) return;
+        const cx = x + width - 14;
+        ctx.fillStyle = "#fff2ad";
+        ctx.strokeStyle = "#34291b";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(cx, y, 4.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = item.year >= 1900 ? "600 11px 'Microsoft JhengHei', sans-serif" : "600 9px 'Microsoft JhengHei', sans-serif";
+        ctx.fillStyle = "rgba(61, 54, 43, .72)";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillText(item.name.length > 10 ? `${item.name.slice(0, 9)}…` : item.name, cx - 8, y);
+        fixedHits.push({ type: "event", item, x: cx - 9, y: y - 9, w: 18, h: 18 });
+      });
+      coreClusters.clusters.forEach(cluster => drawCoreEventCluster(cluster, x, width));
+      ctx.restore();
+    }
+
+    function buildCoreEventClusters(entries) {
+      const groups = new Map();
+      entries.forEach(entry => {
+        if (!shouldShowEventText(entry.item)) return;
+        const key = Math.round(entry.y / 18);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(entry);
+      });
+      const byId = new Map();
+      const clusters = [];
+      groups.forEach(group => {
+        if (group.length < 2) return;
+        group.sort((a, b) => b.item.year - a.item.year || a.item.name.localeCompare(b.item.name));
+        const y = group.reduce((sum, entry) => sum + entry.y, 0) / group.length;
+        const cluster = { entries: group, y };
+        clusters.push(cluster);
+        group.forEach(entry => byId.set(entry.item.id, cluster));
+      });
+      return { byId, clusters };
+    }
+
+    function drawCoreEventCluster(cluster, x, width) {
+      const cx = x + width - 14;
+      const y = cluster.y;
+      const items = cluster.entries.map(entry => entry.item);
+      const names = items.map(item => item.name);
+      const summaryNames = names.slice(0, 2).join("、");
+      ctx.fillStyle = "#fff2ad";
+      ctx.strokeStyle = "#34291b";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.arc(cx, y, 6.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.font = items[0].year >= 1900 ? "700 10px 'Microsoft JhengHei', sans-serif" : "700 9px 'Microsoft JhengHei', sans-serif";
+      ctx.fillStyle = "rgba(46, 41, 34, .82)";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      const label = `+${items.length}: ${summaryNames}${names.length > 2 ? "…" : ""}`;
+      const text = fitText(ctx, label, width - 28);
+      ctx.fillText(text, cx - 8, y);
+      const textWidth = ctx.measureText(text).width;
+      fixedHits.push({ type: "eventCluster", item: items[0], items, x: cx - 10 - textWidth - 8, y: y - 11, w: textWidth + 28, h: 22 });
+    }
+
+    function visibleYearRange() {
+      const topYear = yToYear(screenToWorld(0, 0).y);
+      const bottomYear = yToYear(screenToWorld(0, viewport.height).y);
+      return {
+        min: Math.max(YEAR_MIN, Math.min(topYear, bottomYear)),
+        max: Math.min(YEAR_MAX, Math.max(topYear, bottomYear))
+      };
+    }
+
+    function allEvents() {
+      return events.map(item => ({
+        ...item,
+        trackName: item.core ? "中原主軸" : (trackById.get(item.track)?.name || "")
+      }));
+    }
+
+    function updateEventPanel() {
+      if (eventPanel.classList.contains("collapsed")) return;
+      const range = visibleYearRange();
+      const rows = allEvents()
+        .filter(item => item.year >= range.min && item.year <= range.max)
+        .sort((a, b) => b.year - a.year)
+        .slice(0, 80);
+      eventPanelTitle.textContent = `${formatYear(range.min)} - ${formatYear(range.max)} 大事`;
+      eventList.innerHTML = rows.length
+        ? rows.map(item => `<div class="event-row" data-id="${item.id}"><span class="event-year">${item.year < 0 ? `前${Math.abs(item.year)}` : item.year}</span><span>${item.name}<br><small>${item.trackName}</small></span></div>`).join("")
+        : `<div class="event-row"><span></span><span>目前視窗沒有事件</span></div>`;
+      eventList.querySelectorAll("[data-id]").forEach(row => {
+        row.addEventListener("click", () => {
+          const item = events.find(event => event.id === row.dataset.id);
+          if (!item) return;
+          const y = yearToY(item.year);
+          if (item.core) {
+            focusWorld(WORLD.left, y, Math.max(viewport.scale, .95));
+            return;
+          }
+          if (hiddenTracks.has(item.track)) {
+            hiddenTracks.delete(item.track);
+            computeLayout();
+          }
+          const box = laneBox(item);
+          if (box) focusWorld(box.x + box.width / 2, y, Math.max(viewport.scale, .95));
+        });
+      });
+    }
+
+    function drawFixedAxes() {
+      const axisY = viewport.height - 34;
+      axisHits = [];
+      ctx.save();
+      ctx.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "800 12px 'Microsoft JhengHei', sans-serif";
+      layout.forEach(track => {
+        const left = track.x * viewport.scale + viewport.tx;
+        const right = track.right * viewport.scale + viewport.tx;
+        if (right < 0 || left > viewport.width) return;
+        const x = Math.max(0, left);
+        const w = Math.min(viewport.width, right) - x;
+        if (w < 30) return;
+        ctx.fillStyle = hexToRgba(track.color, .86);
+        roundRect(ctx, x + 2, axisY, Math.max(8, w - 4), 24, 4);
+        ctx.fill();
+        ctx.fillStyle = readableText(track.color);
+        const buttonSize = 18;
+        const buttonX = x + w - buttonSize - 5;
+        const labelWidth = Math.max(20, w - buttonSize - 12);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x + 4, axisY + 2, labelWidth - 4, 20);
+        ctx.clip();
+        ctx.fillText(track.name, x + labelWidth / 2, axisY + 12);
+        ctx.restore();
+        ctx.fillStyle = "rgba(255,250,238,.9)";
+        roundRect(ctx, buttonX, axisY + 3, buttonSize, buttonSize, 4);
+        ctx.fill();
+        ctx.fillStyle = "#34291b";
+        ctx.font = "800 13px 'Microsoft JhengHei', sans-serif";
+        ctx.fillText("×", buttonX + buttonSize / 2, axisY + 12);
+        ctx.font = "800 12px 'Microsoft JhengHei', sans-serif";
+        axisHits.push({ trackId: track.id, x: buttonX, y: axisY + 3, w: buttonSize, h: buttonSize });
+      });
+
+      if (hiddenTracks.size > 0) {
+        let chipX = 14;
+        const chipY = axisY - 31;
+        ctx.textAlign = "left";
+        ctx.font = "700 11px 'Microsoft JhengHei', sans-serif";
+        ctx.fillStyle = "rgba(31,26,18,.88)";
+        ctx.fillText("已隱藏", chipX, chipY + 12);
+        chipX += 50;
+        tracks.filter(track => hiddenTracks.has(track.id)).forEach(track => {
+          const text = `+ ${track.name}`;
+          const width = Math.min(132, Math.max(58, ctx.measureText(text).width + 16));
+          if (chipX + width > viewport.width - 12) return;
+          ctx.fillStyle = "rgba(255,250,238,.92)";
+          roundRect(ctx, chipX, chipY, width, 22, 5);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(54,42,28,.18)";
+          ctx.stroke();
+          ctx.fillStyle = "#3d3223";
+          ctx.fillText(text, chipX + 8, chipY + 12);
+          axisHits.push({ trackId: track.id, x: chipX, y: chipY, w: width, h: 22 });
+          chipX += width + 6;
+        });
+      }
+
+      ctx.textAlign = "right";
+      const drawnYearLabels = new Set();
+      for (const segment of TIME_SEGMENTS) {
+        const steps = stepsForYear(segment.start + 1);
+        ctx.font = steps.label <= 25 ? "700 10px 'Microsoft JhengHei', sans-serif" : "700 12px 'Microsoft JhengHei', sans-serif";
+        for (let year = alignedStart(steps.label); year <= segment.end; year += steps.label) {
+          if (year < segment.start || year > YEAR_MAX) continue;
+          const labelKey = Math.round(year);
+          if (drawnYearLabels.has(labelKey)) continue;
+          drawnYearLabels.add(labelKey);
+          const y = yearToY(year) * viewport.scale + viewport.ty;
+          if (y < 0 || y > viewport.height) continue;
+          ctx.strokeStyle = "rgba(26, 22, 16, .28)";
+          ctx.beginPath();
+          ctx.moveTo(84, y);
+          ctx.lineTo(viewport.width, y);
+          ctx.stroke();
+          ctx.fillStyle = "rgba(255,250,238,.9)";
+          roundRect(ctx, 14, y - 11, 62, 22, 4);
+          ctx.fill();
+          ctx.fillStyle = "#463827";
+          ctx.fillText(year < 0 ? `前${Math.abs(year)}` : `${year}`, 69, y);
+        }
+      }
+
+      const centerYear = yToYear(screenToWorld(0, viewport.height / 2).y);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(31,26,18,.9)";
+      roundRect(ctx, 14, viewport.height - 86, 126, 28, 5);
+      ctx.fill();
+      ctx.fillStyle = "#fff7e8";
+      ctx.font = "700 12px 'Microsoft JhengHei', sans-serif";
+      ctx.fillText(`視窗中心：${formatYear(centerYear)}`, 24, viewport.height - 72);
+      ctx.restore();
+    }
+
+    function drawMinimap() {
+      const rect = minimap.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
+      const dpr = window.devicePixelRatio || 1;
+      if (minimap.width !== Math.floor(rect.width * dpr) || minimap.height !== Math.floor(rect.height * dpr)) {
+        minimap.width = Math.floor(rect.width * dpr);
+        minimap.height = Math.floor(rect.height * dpr);
+      }
+      mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      mctx.clearRect(0, 0, rect.width, rect.height);
+      const scale = Math.min(rect.width / WORLD.width, rect.height / WORLD.totalHeight);
+      const ox = (rect.width - WORLD.width * scale) / 2;
+      const oy = (rect.height - WORLD.totalHeight * scale) / 2;
+      mctx.save();
+      mctx.translate(ox, oy);
+      mctx.scale(scale, scale);
+      drawWorld(mctx, true);
+      mctx.restore();
+      const wx = -viewport.tx / viewport.scale;
+      const wy = -viewport.ty / viewport.scale;
+      const ww = viewport.width / viewport.scale;
+      const wh = viewport.height / viewport.scale;
+      mctx.fillStyle = "rgba(255,255,255,.22)";
+      mctx.strokeStyle = "#111";
+      mctx.lineWidth = 2;
+      mctx.fillRect(ox + wx * scale, oy + wy * scale, ww * scale, wh * scale);
+      mctx.strokeRect(ox + wx * scale, oy + wy * scale, ww * scale, wh * scale);
+      minimap._map = { scale, ox, oy };
+    }
+
+    function clampViewport() {
+      const leftPad = 80;
+      const rightPad = Math.max(80, rightOverlayWidth() + 42);
+      viewport.tx = Math.min(leftPad, Math.max(viewport.width - WORLD.width * viewport.scale - rightPad, viewport.tx));
+      viewport.ty = Math.min(80, Math.max(viewport.height - WORLD.totalHeight * viewport.scale - 80, viewport.ty));
+    }
+
+    function rightOverlayWidth() {
+      if (viewport.width < 760) return 96;
+      const widths = [eventPanel, minimapPanel]
+        .filter(panel => panel && !panel.classList.contains("collapsed"))
+        .map(panel => panel.getBoundingClientRect().width || 0);
+      return widths.length ? Math.max(...widths) : 0;
+    }
+
+    function fitAll() {
+      const sx = viewport.width / WORLD.width;
+      const sy = viewport.height / WORLD.totalHeight;
+      viewport.scale = Math.min(sx, sy) * .94;
+      viewport.minScale = viewport.scale * .72;
+      viewport.tx = (viewport.width - WORLD.width * viewport.scale) / 2;
+      viewport.ty = (viewport.height - WORLD.totalHeight * viewport.scale) / 2;
+      draw();
+    }
+
+    function initialView() {
+      if (viewport.width < 760) {
+        viewport.scale = Math.max(.78, Math.min(1.08, viewport.height / 920));
+        viewport.minScale = .36;
+        focusMobileTrack(0, activeRange.focus, false);
+        draw();
+        return;
+      }
+      const fitWidth = (viewport.width / WORLD.width) * .92;
+      viewport.scale = Math.min(.62, Math.max(.43, fitWidth));
+      viewport.minScale = Math.min(viewport.scale * .5, (viewport.height / WORLD.totalHeight) * .72);
+      viewport.tx = (viewport.width - WORLD.width * viewport.scale) / 2;
+      viewport.ty = viewport.height / 2 - yearToY(1919) * viewport.scale;
+      clampViewport();
+      draw();
+    }
+
+    function zoomAt(cx, cy, factor) {
+      const before = screenToWorld(cx, cy);
+      viewport.scale = Math.min(viewport.maxScale, Math.max(viewport.minScale, viewport.scale * factor));
+      viewport.tx = cx - before.x * viewport.scale;
+      viewport.ty = cy - before.y * viewport.scale;
+      clampViewport();
+      draw();
+    }
+
+    function focusWorld(x, y, scale = Math.max(viewport.scale, .85)) {
+      viewport.scale = Math.min(viewport.maxScale, Math.max(viewport.minScale, scale));
+      viewport.tx = viewport.width / 2 - x * viewport.scale;
+      viewport.ty = viewport.height / 2 - y * viewport.scale;
+      clampViewport();
+      draw();
+    }
+
+    function focusMobileTrack(index = mobileTrackIndex, year = yToYear(screenToWorld(0, viewport.height / 2).y), shouldDraw = true) {
+      const visible = layout.length ? layout : tracks.filter(track => !hiddenTracks.has(track.id));
+      if (!visible.length) return;
+      mobileTrackIndex = (index + visible.length) % visible.length;
+      const track = visible[mobileTrackIndex];
+      mobileTrackLabel.textContent = track.name;
+      viewport.tx = viewport.width / 2 - (track.x + track.width / 2) * viewport.scale;
+      viewport.ty = viewport.height / 2 - yearToY(Math.min(YEAR_MAX, Math.max(YEAR_MIN, year))) * viewport.scale;
+      clampViewport();
+      if (shouldDraw) draw();
+    }
+
+    function updateMobileTrackLabel() {
+      if (!layout.length) return;
+      mobileTrackIndex = Math.min(mobileTrackIndex, layout.length - 1);
+      mobileTrackLabel.textContent = layout[mobileTrackIndex]?.name || "";
+    }
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      viewport.dpr = window.devicePixelRatio || 1;
+      viewport.width = rect.width;
+      viewport.height = rect.height;
+      canvas.width = Math.floor(rect.width * viewport.dpr);
+      canvas.height = Math.floor(rect.height * viewport.dpr);
+      computeLayout();
+      applyResponsivePanelDefaults();
+      if (!resize.didFit) {
+        initialView();
+        resize.didFit = true;
+      } else {
+        clampViewport();
+        draw();
+      }
+    }
+
+    function applyResponsivePanelDefaults() {
+      if (viewport.width < 760 && !applyResponsivePanelDefaults.didMobile) {
+        eventPanel.classList.add("collapsed");
+        eventPanelToggle.textContent = "大";
+        eventPanelToggle.title = "展開大事年表";
+        minimapPanel.classList.add("collapsed");
+        minimapToggle.textContent = "圖";
+        minimapToggle.title = "展開小地圖";
+        applyResponsivePanelDefaults.didMobile = true;
+      }
+    }
+
+    function pointerPosition(event, target = canvas) {
+      const rect = target.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    }
+
+    function hitAt(world) {
+      return [...hits].reverse().find(hit => world.x >= hit.x && world.x <= hit.x + hit.w && world.y >= hit.y && world.y <= hit.y + hit.h);
+    }
+
+    function fixedHitAt(point) {
+      return [...fixedHits].reverse().find(hit => point.x >= hit.x && point.x <= hit.x + hit.w && point.y >= hit.y && point.y <= hit.y + hit.h);
+    }
+
+    function axisHitAt(point) {
+      return [...axisHits].reverse().find(hit => point.x >= hit.x && point.x <= hit.x + hit.w && point.y >= hit.y && point.y <= hit.y + hit.h);
+    }
+
+    function toggleTrack(trackId) {
+      if (hiddenTracks.has(trackId)) {
+        hiddenTracks.delete(trackId);
+      } else {
+        if (tracks.length - hiddenTracks.size <= 1) return;
+        hiddenTracks.add(trackId);
+      }
+      computeLayout();
+      updateMobileTrackLabel();
+      hovered = null;
+      tooltip.style.display = "none";
+      clampViewport();
+      draw();
+    }
+
+    function showTooltip(event, hit) {
+      if (!hit) {
+        tooltip.style.display = "none";
+        return;
+      }
+      if (hit.type === "eventCluster") {
+        const track = trackById.get(hit.item.track);
+        const rows = hit.items
+          .sort((a, b) => b.year - a.year || a.name.localeCompare(b.name))
+          .map(item => `${formatYear(item.year)}　<a href="${item.wiki}" target="_blank" rel="noopener">${item.name}</a>${item.note ? `：${item.note}` : ""}`)
+          .join("<br>");
+        tooltip.innerHTML = `<strong>${hit.items.length} 件大事</strong><span>${track?.name || ""}<br>${rows}</span>`;
+        tooltip.style.display = "block";
+        positionTooltip(event);
+        return;
+      }
+      if (hit.type === "rulerCluster") {
+        const rows = hit.items
+          .sort((a, b) => b.start - a.start)
+          .map(item => `${formatYear(item.start)} - ${formatYear(item.end)}　<a href="${item.wiki}" target="_blank" rel="noopener">${item.name}</a>（${item.polity}）${item.note ? `：${item.note}` : ""}`)
+          .join("<br>");
+        tooltip.innerHTML = `<strong>${hit.items.length} 位君主/首腦</strong><span>${rows}</span>`;
+        tooltip.style.display = "block";
+        positionTooltip(event);
+        return;
+      }
+      const item = hit.item;
+      const track = hit.type === "ruler" ? { name: `${item.polity} · ${item.title}` } : (item.core || hit.type === "core" ? { name: "中原主軸" } : trackById.get(item.track));
+      const time = hit.type === "event" ? formatYear(item.year) : `${formatYear(item.start)} - ${formatYear(item.end)}`;
+      tooltip.innerHTML = `<strong>${item.name}</strong><span>${time} · ${track.name}${item.uncertain ? "<br>年代約略或帶有傳說性質" : ""}${item.note ? `<br>${item.note}` : ""}<br><a href="${item.wiki}" target="_blank" rel="noopener">開啟維基百科</a></span>`;
+      tooltip.style.display = "block";
+      positionTooltip(event);
+    }
+
+    function positionTooltip(event) {
+      const pad = 16;
+      const rect = tooltip.getBoundingClientRect();
+      let x = event.clientX + 14;
+      let y = event.clientY + 14;
+      if (x + rect.width + pad > window.innerWidth) x = event.clientX - rect.width - 14;
+      if (y + rect.height + pad > window.innerHeight) y = event.clientY - rect.height - 14;
+      tooltip.style.left = `${Math.max(pad, x)}px`;
+      tooltip.style.top = `${Math.max(pad, y)}px`;
+    }
+
+    function isTouchLike() {
+      return window.matchMedia?.("(pointer: coarse)")?.matches || viewport.width < 760;
+    }
+
+    canvas.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      const axisHit = axisHitAt(pointerPosition(event));
+      if (axisHit) {
+        toggleTrack(axisHit.trackId);
+        return;
+      }
+      canvas.setPointerCapture(event.pointerId);
+      isDragging = true;
+      dragMoved = false;
+      canvas.classList.add("dragging");
+      dragStart = { x: event.clientX, y: event.clientY, tx: viewport.tx, ty: viewport.ty };
+    });
+
+    canvas.addEventListener("pointermove", event => {
+      if (isDragging) {
+        if (Math.abs(event.clientX - dragStart.x) + Math.abs(event.clientY - dragStart.y) > 6) dragMoved = true;
+        viewport.tx = dragStart.tx + event.clientX - dragStart.x;
+        viewport.ty = dragStart.ty + event.clientY - dragStart.y;
+        clampViewport();
+        draw();
+        return;
+      }
+      const pos = pointerPosition(event);
+      const hit = fixedHitAt(pos) || hitAt(screenToWorld(pos.x, pos.y));
+      hovered = hit || null;
+      showTooltip(event, hit);
+    });
+
+    canvas.addEventListener("pointerup", event => {
+      if (isDragging) canvas.releasePointerCapture(event.pointerId);
+      if (isDragging && !dragMoved && isTouchLike()) {
+        const pos = pointerPosition(event);
+        const hit = fixedHitAt(pos) || hitAt(screenToWorld(pos.x, pos.y));
+        hovered = hit || null;
+        showTooltip(event, hit);
+      }
+      isDragging = false;
+      dragMoved = false;
+      canvas.classList.remove("dragging");
+    });
+
+    canvas.addEventListener("pointercancel", () => {
+      isDragging = false;
+      canvas.classList.remove("dragging");
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      hovered = null;
+      tooltip.style.display = "none";
+    });
+
+    app.addEventListener("wheel", event => {
+      if (event.target.closest(".search")) return;
+      event.preventDefault();
+      const pos = pointerPosition(event);
+      zoomAt(pos.x, pos.y, event.deltaY < 0 ? 1.12 : .89);
+    }, { passive: false });
+
+    canvas.addEventListener("contextmenu", event => {
+      const pos = pointerPosition(event);
+      const hit = fixedHitAt(pos) || hitAt(screenToWorld(pos.x, pos.y));
+      if (hit && hit.item.wiki) {
+        event.preventDefault();
+        window.open(hit.item.wiki, "_blank", "noopener");
+      }
+    });
+
+    minimap.addEventListener("pointerdown", event => {
+      minimap.setPointerCapture(event.pointerId);
+      miniDragging = true;
+      jumpFromMinimap(event);
+    });
+
+    minimap.addEventListener("pointermove", event => {
+      if (miniDragging) jumpFromMinimap(event);
+    });
+
+    minimap.addEventListener("pointerup", event => {
+      minimap.releasePointerCapture(event.pointerId);
+      miniDragging = false;
+    });
+
+    function jumpFromMinimap(event) {
+      const map = minimap._map;
+      if (!map) return;
+      const pos = pointerPosition(event, minimap);
+      const wx = (pos.x - map.ox) / map.scale;
+      const wy = (pos.y - map.oy) / map.scale;
+      viewport.tx = viewport.width / 2 - wx * viewport.scale;
+      viewport.ty = viewport.height / 2 - wy * viewport.scale;
+      clampViewport();
+      draw();
+    }
+
+    function validateData() {
+      const issues = [];
+      const allItems = [
+        ...coreAxis.map(item => ({ ...item, kind: "coreAxis" })),
+        ...rulers.map(item => ({ ...item, kind: "ruler" })),
+        ...periods.map(item => ({ ...item, kind: "period" })),
+        ...events.map(item => ({ ...item, kind: "event" }))
+      ];
+      const ids = new Map();
+      allItems.forEach(item => {
+        if (ids.has(item.id)) issues.push(`duplicate id: ${item.id}`);
+        ids.set(item.id, item);
+        const span = itemSpan(item);
+        if (!Number.isFinite(span.start) || !Number.isFinite(span.end) || span.start > span.end) issues.push(`bad years: ${item.kind}/${item.id}`);
+        if (span.start < ABS_YEAR_MIN || span.end > ABS_YEAR_MAX) issues.push(`year out of bounds: ${item.kind}/${item.id}`);
+        if (!item.verified || !item.sourceLevel || !item.confidence) issues.push(`missing governance: ${item.kind}/${item.id}`);
+      });
+      const trackIds = new Set(tracks.map(track => track.id));
+      [...periods, ...events.filter(item => !item.core)].forEach(item => {
+        if (!trackIds.has(item.track)) issues.push(`unknown track: ${item.id} -> ${item.track}`);
+        if ((item.lane || 0) >= laneCountForTrack(item.track)) issues.push(`lane overflow: ${item.id} lane ${item.lane}`);
+      });
+      const keyed = new Map();
+      periods.forEach(item => {
+        const key = `${item.track}:${Math.min(item.lane || 0, laneCountForTrack(item.track) - 1)}`;
+        if (!keyed.has(key)) keyed.set(key, []);
+        keyed.get(key).push(item);
+      });
+      keyed.forEach(items => {
+        items.sort((a, b) => a.start - b.start).forEach((item, index, arr) => {
+          const prev = arr[index - 1];
+          if (prev && item.start < prev.end && item.id !== prev.id) issues.push(`period overlap: ${prev.id} / ${item.id}`);
+        });
+      });
+      if (issues.length) console.warn("[history-data-validation]", issues);
+      else console.info("[history-data-validation] OK");
+      return issues;
+    }
+
+    timeRanges.forEach(range => {
+      const option = document.createElement("option");
+      option.value = range.id;
+      option.textContent = range.label;
+      rangeSelect.appendChild(option);
+    });
+    rangeSelect.value = activeRange.id;
+    rangeSelect.addEventListener("change", () => applyTimeRange(rangeSelect.value));
+    mobilePrevTrack.addEventListener("click", () => focusMobileTrack(mobileTrackIndex - 1));
+    mobileNextTrack.addEventListener("click", () => focusMobileTrack(mobileTrackIndex + 1));
+    document.getElementById("zoomIn").addEventListener("click", () => zoomAt(viewport.width / 2, viewport.height / 2, 1.22));
+    document.getElementById("zoomOut").addEventListener("click", () => zoomAt(viewport.width / 2, viewport.height / 2, .82));
+    document.getElementById("fit").addEventListener("click", fitAll);
+    document.getElementById("fullscreen").addEventListener("click", () => {
+      const root = document.getElementById("app");
+      if (!document.fullscreenElement) root.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    });
+    eventPanelToggle.addEventListener("click", () => {
+      const collapsed = eventPanel.classList.toggle("collapsed");
+      eventPanelToggle.textContent = collapsed ? "大" : "×";
+      eventPanelToggle.title = collapsed ? "展開大事年表" : "收合大事年表";
+      if (!collapsed) updateEventPanel();
+      clampViewport();
+      setTimeout(draw, 0);
+    });
+    minimapToggle.addEventListener("click", () => {
+      const collapsed = minimapPanel.classList.toggle("collapsed");
+      minimapToggle.textContent = collapsed ? "圖" : "×";
+      minimapToggle.title = collapsed ? "展開小地圖" : "收合小地圖";
+      clampViewport();
+      setTimeout(draw, 0);
+    });
+    document.addEventListener("fullscreenchange", () => {
+      resize.didFit = false;
+      setTimeout(resize, 80);
+    });
+
+    searchInput.addEventListener("input", () => {
+      const q = searchInput.value.trim().toLowerCase();
+      suggestions.innerHTML = "";
+      if (!q) {
+        suggestions.classList.remove("visible");
+        return;
+      }
+      const index = [
+        ...coreAxis.map(item => ({ kind: "中原主軸", item, text: item.name, coreAxis: true })),
+        ...rulers.map(item => ({ kind: "君主/首腦", item, text: item.name, ruler: true })),
+        ...periods.map(item => ({ kind: "時期/政權", item, text: item.name })),
+        ...events.map(item => ({ kind: "事件", item, text: item.name, event: true }))
+      ];
+      index.filter(entry => entry.text.toLowerCase().includes(q)).slice(0, 14).forEach(entry => {
+        const div = document.createElement("div");
+        const track = entry.ruler ? { name: entry.item.polity } : (entry.item.core || entry.coreAxis ? { name: "中原主軸" } : trackById.get(entry.item.track));
+        const time = entry.event ? formatYear(entry.item.year) : `${formatYear(entry.item.start)} - ${formatYear(entry.item.end)}`;
+        div.className = "suggestion";
+        div.innerHTML = `${entry.text}<small>${entry.kind} · ${track.name} · ${time}</small>`;
+        div.addEventListener("click", () => {
+          ensureRangeForItem(entry.item);
+          if (entry.ruler) {
+            const y = (yearToY(entry.item.start) + yearToY(entry.item.end)) / 2;
+            focusWorld(WORLD.left, y, .95);
+            searchInput.value = entry.text;
+            suggestions.classList.remove("visible");
+            return;
+          }
+          if (entry.coreAxis || entry.item.core) {
+            const y = entry.event ? yearToY(entry.item.year) : (yearToY(entry.item.start) + yearToY(entry.item.end)) / 2;
+            focusWorld(WORLD.left, y, .95);
+            searchInput.value = entry.text;
+            suggestions.classList.remove("visible");
+            return;
+          }
+          if (hiddenTracks.has(entry.item.track)) {
+            hiddenTracks.delete(entry.item.track);
+            computeLayout();
+          }
+          const box = laneBox(entry.item);
+          if (!box) return;
+          const y = entry.event ? yearToY(entry.item.year) : (yearToY(entry.item.start) + yearToY(entry.item.end)) / 2;
+          focusWorld(box.x + box.width / 2, y, .95);
+          searchInput.value = entry.text;
+          suggestions.classList.remove("visible");
+        });
+        suggestions.appendChild(div);
+      });
+      suggestions.classList.toggle("visible", suggestions.children.length > 0);
+    });
+
+    window.addEventListener("click", event => {
+      if (!event.target.closest(".search")) suggestions.classList.remove("visible");
+    });
+
+    validateData();
+    computeLayout();
+    window.addEventListener("resize", resize);
+    resize();
+  </script>
+</body>
+</html>
