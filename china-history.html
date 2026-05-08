@@ -359,30 +359,44 @@
 
     @media (max-width: 760px) {
       .toolbar {
-        left: 8px;
-        right: 8px;
+        left: 6px;
+        right: 6px;
         flex-wrap: wrap;
-        gap: 6px;
-        padding: 7px;
+        gap: 5px;
+        padding: 6px;
       }
 
       .title {
         width: auto;
-        min-width: 136px;
-        flex: 1 1 136px;
+        min-width: 118px;
+        flex: 1 1 118px;
         border-right: 0;
       }
 
+      .title strong { font-size: 13px; }
       .title span { display: none; }
+
+      button {
+        width: 31px;
+        height: 31px;
+        border-radius: 6px;
+      }
 
       .search {
         flex: 1 1 100%;
         width: auto;
       }
 
+      .search input {
+        height: 31px;
+        font-size: 12px;
+      }
+
       .range-control {
-        flex: 1 1 140px;
-        min-width: 132px;
+        flex: 0 0 92px;
+        min-width: 92px;
+        height: 31px;
+        padding: 0 8px;
       }
 
       .note { display: none; }
@@ -391,7 +405,7 @@
       .dock {
         right: 8px;
         top: auto;
-        bottom: 8px;
+        bottom: 58px;
       }
 
       .minimap-panel,
@@ -404,7 +418,12 @@
         padding: 6px;
       }
 
-      .mobile-strip { display: grid; }
+      .mobile-strip {
+        display: grid;
+        left: 6px;
+        right: 6px;
+        bottom: 6px;
+      }
 
       .tooltip { pointer-events: auto; }
     }
@@ -1197,11 +1216,11 @@
 
     function setResponsiveMetrics() {
       const mobile = viewport.width > 0 && viewport.width < 760;
-      WORLD.left = mobile ? 252 : 400;
-      RULER_AXIS.x = mobile ? 78 : 82;
-      RULER_AXIS.width = mobile ? 58 : 94;
-      CORE_AXIS.x = mobile ? 146 : 190;
-      CORE_AXIS.width = mobile ? 92 : 168;
+      WORLD.left = mobile ? 158 : 400;
+      RULER_AXIS.x = mobile ? 38 : 82;
+      RULER_AXIS.width = mobile ? 32 : 94;
+      CORE_AXIS.x = mobile ? 76 : 190;
+      CORE_AXIS.width = mobile ? 74 : 168;
     }
 
     function applyTimeRange(rangeId, keepCenter = false) {
@@ -1352,6 +1371,12 @@
       const value = Math.round(year);
       return value < 0 ? `西元前 ${Math.abs(value)}` : `西元 ${value}`;
     }
+
+    function compactYear(year) {
+      const value = Math.round(year);
+      return value < 0 ? `前${Math.abs(value)}` : `${value}`;
+    }
+
     function hexToRgba(hex, alpha) {
       const value = hex.replace("#", "");
       return `rgba(${parseInt(value.slice(0,2),16)}, ${parseInt(value.slice(2,4),16)}, ${parseInt(value.slice(4,6),16)}, ${alpha})`;
@@ -1611,7 +1636,10 @@
       ctx.save();
       ctx.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
       ctx.fillStyle = "rgba(255, 250, 238, .93)";
-      roundRect(ctx, x - 8, 78, width + 16, viewport.height - 128, 8);
+      const mobile = viewport.width < 760;
+      const top = mobile ? 104 : 78;
+      const bottom = mobile ? 76 : 128;
+      roundRect(ctx, x - (mobile ? 4 : 8), top, width + (mobile ? 8 : 16), viewport.height - bottom, mobile ? 5 : 8);
       ctx.fill();
       ctx.strokeStyle = "rgba(54,42,28,.18)";
       ctx.stroke();
@@ -1619,8 +1647,8 @@
       ctx.fillStyle = "#2d2418";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = "800 13px 'Microsoft JhengHei', sans-serif";
-      ctx.fillText(viewport.width < 760 ? "首腦" : "代表首腦", x + width / 2, 92);
+      ctx.font = mobile ? "800 10px 'Microsoft JhengHei', sans-serif" : "800 13px 'Microsoft JhengHei', sans-serif";
+      ctx.fillText(mobile ? "首腦" : "代表首腦", x + width / 2, mobile ? 116 : 92);
 
       const visible = rulers
         .filter(item => item.end >= YEAR_MIN && item.start <= YEAR_MAX)
@@ -1629,7 +1657,7 @@
           y1: yearToY(item.end) * viewport.scale + viewport.ty,
           y2: yearToY(item.start) * viewport.scale + viewport.ty
         }))
-        .filter(entry => entry.y2 >= 78 && entry.y1 <= viewport.height - 40);
+        .filter(entry => entry.y2 >= top && entry.y1 <= viewport.height - 40);
       const dense = buildRulerClusters(visible);
       visible.forEach(entry => {
         if (dense.byId.has(entry.item.id)) return;
@@ -1640,7 +1668,8 @@
     }
 
     function drawRulerBlock(item, x, width, y1, y2) {
-      const yy = Math.max(104, y1);
+      const mobile = viewport.width < 760;
+      const yy = Math.max(mobile ? 126 : 104, y1);
       const hh = Math.min(viewport.height - 40, y2) - yy;
       if (hh < 3) return;
       const color = colorForPolity(item.polity);
@@ -1658,14 +1687,14 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         const label = item.uncertain ? `${item.name}?` : item.name;
-        const size = Math.max(8, Math.min(13, Math.min(width / Math.max(2, label.length * .8), hh / 2.2)));
+        const size = Math.max(mobile ? 7 : 8, Math.min(mobile ? 10 : 13, Math.min(width / Math.max(2, label.length * .8), hh / 2.2)));
         ctx.font = `800 ${size}px 'Microsoft JhengHei', sans-serif`;
         if (ctx.measureText(label).width <= width - 8 && hh >= size + 8) {
           ctx.fillText(label, x + width / 2, yy + hh / 2);
         } else {
-          drawVerticalText(ctx, label.slice(0, 4), x + width / 2, yy + hh / 2, Math.min(12, Math.max(8, width - 8)));
+          drawVerticalText(ctx, label.slice(0, mobile ? 3 : 4), x + width / 2, yy + hh / 2, Math.min(mobile ? 9 : 12, Math.max(7, width - 8)));
         }
-        if (hh > 42) {
+        if (!mobile && hh > 42) {
           ctx.globalAlpha = .82;
           ctx.font = "600 8px 'Microsoft JhengHei', sans-serif";
           ctx.fillText(item.title, x + width / 2, yy + hh - 9);
@@ -1679,7 +1708,7 @@
       const byId = new Map();
       const clusters = [];
       const sorted = entries
-        .filter(entry => Math.min(viewport.height - 40, entry.y2) - Math.max(104, entry.y1) < 12)
+        .filter(entry => Math.min(viewport.height - 40, entry.y2) - Math.max(viewport.width < 760 ? 126 : 104, entry.y1) < (viewport.width < 760 ? 16 : 12))
         .sort((a, b) => a.y1 - b.y1);
       let group = [];
       sorted.forEach(entry => {
@@ -1738,7 +1767,10 @@
       ctx.save();
       ctx.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
       ctx.fillStyle = "rgba(255, 250, 238, .92)";
-      roundRect(ctx, x - 10, 78, width + 20, viewport.height - 128, 8);
+      const mobile = viewport.width < 760;
+      const top = mobile ? 104 : 78;
+      const bottom = mobile ? 76 : 128;
+      roundRect(ctx, x - (mobile ? 4 : 10), top, width + (mobile ? 8 : 20), viewport.height - bottom, mobile ? 5 : 8);
       ctx.fill();
       ctx.strokeStyle = "rgba(54,42,28,.18)";
       ctx.stroke();
@@ -1746,16 +1778,16 @@
       ctx.fillStyle = "#2d2418";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = "800 13px 'Microsoft JhengHei', sans-serif";
-      ctx.fillText("中原主軸", x + width / 2, 92);
+      ctx.font = mobile ? "800 10px 'Microsoft JhengHei', sans-serif" : "800 13px 'Microsoft JhengHei', sans-serif";
+      ctx.fillText(mobile ? "主軸" : "中原主軸", x + width / 2, mobile ? 116 : 92);
 
       coreAxis.forEach(item => {
         if (item.end < YEAR_MIN || item.start > YEAR_MAX) return;
         const y1 = yearToY(item.end) * viewport.scale + viewport.ty;
         const y2 = yearToY(item.start) * viewport.scale + viewport.ty;
         const h = Math.max(4, y2 - y1);
-        if (y2 < 78 || y1 > viewport.height - 40) return;
-        const yy = Math.max(104, y1);
+        if (y2 < top || y1 > viewport.height - 40) return;
+        const yy = Math.max(mobile ? 126 : 104, y1);
         const hh = Math.min(viewport.height - 40, y2) - yy;
         if (hh < 3) return;
         ctx.fillStyle = hexToRgba(item.color, .92);
@@ -1764,11 +1796,11 @@
         ctx.strokeStyle = "rgba(35,27,18,.45)";
         ctx.stroke();
         ctx.fillStyle = readableText(item.color);
-        ctx.font = `800 ${Math.max(10, Math.min(18, hh / 3.2))}px 'Microsoft JhengHei', sans-serif`;
+        ctx.font = `800 ${Math.max(mobile ? 8 : 10, Math.min(mobile ? 12 : 18, hh / 3.2))}px 'Microsoft JhengHei', sans-serif`;
         if (hh > 20) {
           ctx.fillText(item.name, x + width / 2, yy + hh / 2);
         }
-        if (hh > 46 && item.note) {
+        if (!mobile && hh > 46 && item.note) {
           ctx.font = "600 9px 'Microsoft JhengHei', sans-serif";
           ctx.globalAlpha = .82;
           ctx.fillText(item.note.slice(0, 16), x + width / 2, yy + hh - 12);
@@ -1781,11 +1813,11 @@
         .filter(item => item.core)
         .filter(item => item.year >= YEAR_MIN && item.year <= YEAR_MAX)
         .map(item => ({ item, y: yearToY(item.year) * viewport.scale + viewport.ty }))
-        .filter(entry => entry.y >= 78 && entry.y <= viewport.height - 40);
+        .filter(entry => entry.y >= top && entry.y <= viewport.height - 40);
       const coreClusters = buildCoreEventClusters(coreEventEntries);
       coreEventEntries.forEach(({ item, y }) => {
         if (coreClusters.byId.has(item.id)) return;
-        if (y < 78 || y > viewport.height - 40) return;
+        if (y < top || y > viewport.height - 40) return;
         const cx = x + width - 14;
         ctx.fillStyle = "#fff2ad";
         ctx.strokeStyle = "#34291b";
@@ -1960,9 +1992,10 @@
 
       ctx.textAlign = "right";
       const drawnYearLabels = new Set();
+      const mobile = viewport.width < 760;
       for (const segment of TIME_SEGMENTS) {
         const steps = stepsForYear(segment.start + 1);
-        ctx.font = steps.label <= 25 ? "700 10px 'Microsoft JhengHei', sans-serif" : "700 12px 'Microsoft JhengHei', sans-serif";
+        ctx.font = mobile ? "700 10px 'Microsoft JhengHei', sans-serif" : (steps.label <= 25 ? "700 10px 'Microsoft JhengHei', sans-serif" : "700 12px 'Microsoft JhengHei', sans-serif");
         for (let year = alignedStart(steps.label); year <= segment.end; year += steps.label) {
           if (year < segment.start || year > YEAR_MAX) continue;
           const labelKey = Math.round(year);
@@ -1972,14 +2005,14 @@
           if (y < 0 || y > viewport.height) continue;
           ctx.strokeStyle = "rgba(26, 22, 16, .28)";
           ctx.beginPath();
-          ctx.moveTo(84, y);
+          ctx.moveTo(mobile ? 34 : 84, y);
           ctx.lineTo(viewport.width, y);
           ctx.stroke();
           ctx.fillStyle = "rgba(255,250,238,.9)";
-          roundRect(ctx, 14, y - 11, 62, 22, 4);
+          roundRect(ctx, mobile ? 3 : 14, y - (mobile ? 9 : 11), mobile ? 30 : 62, mobile ? 18 : 22, 4);
           ctx.fill();
           ctx.fillStyle = "#463827";
-          ctx.fillText(year < 0 ? `前${Math.abs(year)}` : `${year}`, 69, y);
+          ctx.fillText(mobile ? compactYear(year) : (year < 0 ? `前${Math.abs(year)}` : `${year}`), mobile ? 29 : 69, y);
         }
       }
 
@@ -2025,7 +2058,7 @@
     }
 
     function clampViewport() {
-      const leftPad = 80;
+      const leftPad = viewport.width < 760 ? 44 : 80;
       const rightPad = Math.max(80, rightOverlayWidth() + 42);
       viewport.tx = Math.min(leftPad, Math.max(viewport.width - WORLD.width * viewport.scale - rightPad, viewport.tx));
       viewport.ty = Math.min(80, Math.max(viewport.height - WORLD.totalHeight * viewport.scale - 80, viewport.ty));
@@ -2051,7 +2084,7 @@
 
     function initialView() {
       if (viewport.width < 760) {
-        viewport.scale = Math.max(.78, Math.min(1.08, viewport.height / 920));
+        viewport.scale = Math.max(.72, Math.min(.98, viewport.height / 980));
         viewport.minScale = .36;
         focusMobileTrack(0, activeRange.focus, false);
         draw();
@@ -2089,7 +2122,8 @@
       mobileTrackIndex = (index + visible.length) % visible.length;
       const track = visible[mobileTrackIndex];
       mobileTrackLabel.textContent = track.name;
-      viewport.tx = viewport.width / 2 - (track.x + track.width / 2) * viewport.scale;
+      const targetScreenX = viewport.width < 760 ? Math.min(viewport.width * .46, WORLD.left + 42) : viewport.width / 2;
+      viewport.tx = targetScreenX - (track.x + track.width / 2) * viewport.scale;
       viewport.ty = viewport.height / 2 - yearToY(Math.min(YEAR_MAX, Math.max(YEAR_MIN, year))) * viewport.scale;
       clampViewport();
       if (shouldDraw) draw();

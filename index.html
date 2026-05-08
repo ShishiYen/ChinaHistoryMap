@@ -1,0 +1,1678 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>全世界歷史時間地圖</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f7f0df;
+      --ink: #1b1b1b;
+      --muted: #6d6557;
+      --line: rgba(34, 28, 20, .18);
+      --panel: rgba(255, 252, 244, .93);
+      --shadow: 0 16px 42px rgba(30, 24, 14, .18);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #18140e;
+      color: var(--ink);
+      font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(0, 0, 0, .06), transparent 18%, transparent 82%, rgba(0, 0, 0, .08)),
+        var(--paper);
+    }
+
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    canvas.dragging { cursor: grabbing; }
+
+    .toolbar {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid rgba(66, 54, 34, .18);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .toolbar.collapsed {
+      width: 42px;
+      height: 42px;
+      padding: 4px;
+      overflow: hidden;
+    }
+
+    .toolbar.collapsed > :not(.panel-toggle) { display: none; }
+
+    .title {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 172px;
+      padding: 0 8px 0 4px;
+      border-right: 1px solid var(--line);
+      line-height: 1.2;
+    }
+
+    .title strong {
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .title span {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    button {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid rgba(45, 38, 26, .18);
+      border-radius: 7px;
+      background: #fff8e8;
+      color: #2f281c;
+      font: 700 18px/1 system-ui, sans-serif;
+      cursor: pointer;
+    }
+
+    button:hover { background: #fff1cf; }
+
+    .panel-toggle {
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      font-size: 14px;
+    }
+
+    .search {
+      position: relative;
+      width: min(320px, 34vw);
+    }
+
+    .search input {
+      width: 100%;
+      height: 34px;
+      border: 1px solid rgba(45, 38, 26, .18);
+      border-radius: 7px;
+      background: #fffbf0;
+      color: #2a241b;
+      padding: 0 34px 0 11px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .search input:focus {
+      border-color: rgba(138, 84, 34, .6);
+      box-shadow: 0 0 0 3px rgba(168, 103, 45, .14);
+    }
+
+    .search::after {
+      content: "⌕";
+      position: absolute;
+      right: 10px;
+      top: 4px;
+      color: #8a7a62;
+      font-size: 20px;
+      pointer-events: none;
+    }
+
+    .suggestions {
+      position: absolute;
+      top: 40px;
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      overflow: auto;
+      border: 1px solid rgba(45, 38, 26, .18);
+      border-radius: 8px;
+      background: #fffbf0;
+      box-shadow: var(--shadow);
+      display: none;
+    }
+
+    .suggestions.visible { display: block; }
+
+    .suggestion {
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(45, 38, 26, .08);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .suggestion:hover { background: #fff0cf; }
+
+    .suggestion small {
+      display: block;
+      margin-top: 2px;
+      color: #766a58;
+      font-size: 11px;
+    }
+
+    .legend {
+      position: absolute;
+      left: 14px;
+      bottom: 96px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border: 1px solid rgba(66, 54, 34, .18);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      color: #3b3326;
+      font-size: 12px;
+    }
+
+    .legend-popover {
+      position: absolute;
+      top: 66px;
+      left: 14px;
+      display: none;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border: 1px solid rgba(66, 54, 34, .18);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      color: #3b3326;
+      font-size: 12px;
+    }
+
+    .legend-popover.visible { display: flex; }
+
+    .legend-item {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      white-space: nowrap;
+    }
+
+    .swatch {
+      width: 18px;
+      height: 10px;
+      border: 1px solid rgba(0, 0, 0, .24);
+      border-radius: 2px;
+    }
+
+    .minimap-wrap {
+      position: static;
+      width: 137px;
+      height: 195px;
+      padding: 8px;
+      border: 1px solid rgba(66, 54, 34, .2);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    #minimap {
+      position: static;
+      width: 100%;
+      height: 100%;
+      border-radius: 5px;
+      background: #fbf2dc;
+      cursor: crosshair;
+    }
+
+    .tooltip {
+      position: absolute;
+      z-index: 10;
+      min-width: 168px;
+      max-width: 250px;
+      padding: 7px 8px;
+      border: 1px solid rgba(45, 38, 26, .18);
+      border-radius: 6px;
+      background: rgba(31, 26, 18, .98);
+      color: #fff7e8;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, .34);
+      pointer-events: none;
+      display: none;
+    }
+
+    .tooltip strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 12px;
+    }
+
+    .tooltip span {
+      color: #f0dcb5;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    .status {
+      max-width: 360px;
+      padding: 8px 10px;
+      border: 1px solid rgba(66, 54, 34, .18);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      color: #4b4030;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .right-dock {
+      position: absolute;
+      right: 14px;
+      top: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .right-dock .dock-head {
+      display: flex;
+      justify-content: flex-end;
+      width: 100%;
+    }
+
+    .right-dock.collapsed {
+      width: 42px;
+      min-height: 104px;
+      padding: 4px;
+      border: 1px solid rgba(66, 54, 34, .18);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      align-items: center;
+    }
+
+    .right-dock.collapsed .status,
+    .right-dock.collapsed .minimap-wrap { display: none; }
+
+    .right-dock.collapsed::after {
+      content: "資訊";
+      writing-mode: vertical-rl;
+      color: #5a4b36;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .legend.collapsed {
+      width: 42px;
+      height: 42px;
+      padding: 4px;
+      overflow: hidden;
+    }
+
+    .legend.collapsed .legend-item { display: none; }
+
+    @media (max-width: 760px) {
+      .toolbar {
+        left: 8px;
+        right: 8px;
+        flex-wrap: wrap;
+      }
+
+      .title {
+        width: 100%;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 2px 4px 7px;
+      }
+
+      .search {
+        flex: 1 1 190px;
+        width: auto;
+      }
+
+      .status {
+        max-width: min(260px, calc(100vw - 16px));
+      }
+
+      .legend {
+        display: none;
+      }
+
+      .right-dock {
+        right: 8px;
+        top: auto;
+        bottom: 8px;
+      }
+
+      .minimap-wrap {
+        width: 96px;
+        height: 138px;
+        padding: 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="timeline" aria-label="全世界歷史時間地圖"></canvas>
+    <div class="toolbar">
+      <button id="toolbarToggle" class="panel-toggle" type="button" title="收合工具列">×</button>
+      <div class="title">
+        <strong>全世界歷史時間地圖</strong>
+        <span>西元前 3500 → 2026，古代在下</span>
+      </div>
+      <button id="zoomIn" type="button" title="放大">+</button>
+      <button id="zoomOut" type="button" title="縮小">−</button>
+      <button id="fit" type="button" title="回到全圖">⌂</button>
+      <button id="fullscreen" type="button" title="全螢幕">⛶</button>
+      <button id="legendMenu" type="button" title="圖例">圖</button>
+      <button id="chinaPage" type="button" title="中國史">中</button>
+      <div class="search">
+        <input id="searchInput" type="search" placeholder="搜尋文明、朝代或事件" autocomplete="off">
+        <div id="suggestions" class="suggestions"></div>
+      </div>
+    </div>
+    <div id="legendPopover" class="legend-popover">
+      <span class="legend-item"><i class="swatch" style="background:#b94c3a"></i>政權/文明</span>
+      <span class="legend-item"><i class="swatch" style="background:rgba(70,70,70,.48)"></i>直接統治</span>
+      <span class="legend-item"><i class="swatch" style="background:rgba(70,70,70,.26)"></i>征服/政治壓力</span>
+      <span class="legend-item"><i class="swatch" style="background:rgba(70,70,70,.14)"></i>文化/貿易影響</span>
+    </div>
+    <div id="rightDock" class="right-dock">
+      <div class="dock-head">
+        <button id="rightDockToggle" class="panel-toggle" type="button" title="收合資訊欄">×</button>
+      </div>
+      <div class="status">
+        拖曳移動畫面，滾輪縮放。事件點可滑過查看，右鍵開啟維基百科。資料為第一版人工策展與 Wikidata/Wikipedia 名稱連結整理。
+      </div>
+      <div class="minimap-wrap">
+        <canvas id="minimap" aria-label="時間地圖縮圖"></canvas>
+      </div>
+    </div>
+    <div id="tooltip" class="tooltip"></div>
+  </div>
+
+  <script>
+    const YEAR_MIN = -3500;
+    const YEAR_MAX = 2026;
+    const WORLD = {
+      left: 96,
+      right: 80,
+      top: 92,
+      bottom: 92,
+      regionWidth: 245,
+      gap: 16,
+      height: 6100
+    };
+
+    const colors = {
+      taiwan: "#2d9c8c",
+      eastAsia: "#c94f3b",
+      northeastAsia: "#668bd6",
+      innerAsia: "#d9783b",
+      southeastAsia: "#45a56d",
+      southAsia: "#65a65c",
+      westAsia: "#b06bce",
+      northAfrica: "#d1a44a",
+      europe: "#5d84c9",
+      subSaharanAfrica: "#8d6c4f",
+      americas: "#c95d74",
+      oceania: "#4aa6bc",
+      global: "#777777"
+    };
+
+    const regions = [
+      { id: "taiwan", name: "台灣", lanes: 5, color: colors.taiwan },
+      { id: "eastAsia", name: "東亞大陸", lanes: 8, color: colors.eastAsia },
+      { id: "northeastAsia", name: "東北亞", lanes: 4, color: colors.northeastAsia },
+      { id: "innerAsia", name: "內亞草原", lanes: 4, color: colors.innerAsia },
+      { id: "southeastAsia", name: "東南亞", lanes: 5, color: colors.southeastAsia },
+      { id: "southAsia", name: "南亞", lanes: 5, color: colors.southAsia },
+      { id: "westAsia", name: "西亞與中東", lanes: 5, color: colors.westAsia },
+      { id: "northAfrica", name: "北非與尼羅河", lanes: 4, color: colors.northAfrica },
+      { id: "europe", name: "歐洲", lanes: 9, color: colors.europe },
+      { id: "subSaharanAfrica", name: "撒哈拉以南非洲", lanes: 5, color: colors.subSaharanAfrica },
+      { id: "americas", name: "美洲", lanes: 5, color: colors.americas },
+      { id: "oceania", name: "大洋洲與太平洋", lanes: 3, color: colors.oceania },
+      { id: "global", name: "跨區全球系統", lanes: 4, color: colors.global }
+    ];
+
+    const wiki = (title, lang = "zh") => `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title)}`;
+
+    const polities = [
+      p("tw-pre", "台灣史前文化", "taiwan", 0, -30000, 1624, "臺灣史前時期"),
+      p("tw-dapenkeng", "大坌坑文化", "taiwan", 1, -5000, -2500, "大坌坑文化"),
+      p("tw-austro", "南島語族擴散", "taiwan", 2, -3000, 1200, "南島民族"),
+      p("tw-yuanshan", "圓山文化", "taiwan", 1, -2500, -300, "圓山文化"),
+      p("tw-beinan", "卑南文化", "taiwan", 2, -1500, 500, "卑南文化"),
+      p("tw-shihsanhang", "十三行文化", "taiwan", 3, 200, 1500, "十三行文化"),
+      p("tw-indigenous", "原住民族社會", "taiwan", 4, -3000, 2026, "臺灣原住民族"),
+      p("tw-dutch", "荷蘭統治", "taiwan", 0, 1624, 1662, "臺灣荷蘭統治時期"),
+      p("tw-spanish", "西班牙北台灣", "taiwan", 1, 1626, 1642, "臺灣西班牙統治時期"),
+      p("tw-kingdom", "明鄭", "taiwan", 0, 1662, 1683, "明鄭時期"),
+      p("tw-qing-frontier", "清治開山撫番前", "taiwan", 1, 1683, 1874, "臺灣清治時期"),
+      p("tw-qing-province", "建省與近代化", "taiwan", 2, 1885, 1895, "福建臺灣省"),
+      p("tw-qing", "清治台灣", "taiwan", 0, 1683, 1895, "臺灣清治時期"),
+      p("tw-republic-1895", "台灣民主國", "taiwan", 1, 1895, 1895, "臺灣民主國"),
+      p("tw-japan", "日治台灣", "taiwan", 0, 1895, 1945, "臺灣日治時期"),
+      p("tw-japan-armed", "武裝抗日與理蕃", "taiwan", 1, 1895, 1915, "臺灣抗日運動"),
+      p("tw-japan-assim", "同化與皇民化", "taiwan", 2, 1915, 1945, "皇民化運動"),
+      p("tw-roc", "戰後台灣", "taiwan", 0, 1945, 1987, "臺灣戰後時期"),
+      p("tw-white-terror", "戒嚴與白色恐怖", "taiwan", 1, 1949, 1987, "臺灣白色恐怖時期"),
+      p("tw-dem", "民主化與當代台灣", "taiwan", 0, 1987, 2026, "臺灣民主化"),
+
+      p("ea-xia", "夏", "eastAsia", 0, -2070, -1600, "夏朝"),
+      p("ea-shang", "商", "eastAsia", 0, -1600, -1046, "商朝"),
+      p("ea-western-zhou", "西周", "eastAsia", 0, -1046, -771, "西周"),
+      p("ea-eastern-zhou", "東周", "eastAsia", 0, -770, -256, "東周"),
+      p("ea-spring-autumn", "春秋時期", "eastAsia", 0, -770, -476, "春秋时期"),
+      p("ea-warring", "戰國時期", "eastAsia", 0, -475, -221, "戰國時期"),
+      p("ea-qi", "齊", "eastAsia", 1, -1046, -221, "齊國"),
+      p("ea-jin-state", "晉", "eastAsia", 2, -1033, -376, "晉國"),
+      p("ea-chu", "楚", "eastAsia", 3, -1030, -223, "楚國"),
+      p("ea-qin-state", "秦國", "eastAsia", 4, -900, -221, "秦國"),
+      p("ea-yan", "燕", "eastAsia", 5, -1044, -222, "燕國"),
+      p("ea-zhao", "趙", "eastAsia", 1, -403, -222, "趙國"),
+      p("ea-wei-state", "魏", "eastAsia", 2, -403, -225, "魏國"),
+      p("ea-han-state", "韓", "eastAsia", 3, -403, -230, "韓國_(戰國)"),
+      p("ea-qin", "秦", "eastAsia", 0, -221, -206, "秦朝"),
+      p("ea-han", "漢", "eastAsia", 0, -202, 220, "漢朝"),
+      p("ea-three", "三國", "eastAsia", 0, 220, 280, "三國"),
+      p("ea-wei-kingdom", "曹魏", "eastAsia", 1, 220, 266, "曹魏"),
+      p("ea-shu-han", "蜀漢", "eastAsia", 2, 221, 263, "蜀漢"),
+      p("ea-eastern-wu", "東吳", "eastAsia", 3, 229, 280, "東吳"),
+      p("ea-jin", "晉", "eastAsia", 0, 266, 420, "晉朝"),
+      p("ea-ns", "南北朝", "eastAsia", 0, 420, 589, "南北朝"),
+      p("ea-sui", "隋", "eastAsia", 0, 581, 618, "隋朝"),
+      p("ea-tang", "唐", "eastAsia", 0, 618, 907, "唐朝"),
+      p("ea-five", "五代十國", "eastAsia", 0, 907, 960, "五代十國"),
+      p("ea-later-liang", "後梁", "eastAsia", 0, 907, 923, "後梁"),
+      p("ea-later-tang", "後唐", "eastAsia", 0, 923, 936, "後唐"),
+      p("ea-later-jin", "後晉", "eastAsia", 0, 936, 947, "後晉"),
+      p("ea-later-han", "後漢", "eastAsia", 0, 947, 951, "後漢_(五代)"),
+      p("ea-later-zhou", "後周", "eastAsia", 0, 951, 960, "後周"),
+      p("ea-wuyue", "吳越", "eastAsia", 4, 907, 978, "吳越"),
+      p("ea-min", "閩", "eastAsia", 5, 909, 945, "閩國"),
+      p("ea-southern-tang", "南唐", "eastAsia", 6, 937, 975, "南唐"),
+      p("ea-jingnan", "荊南", "eastAsia", 7, 924, 963, "荊南"),
+      p("ea-former-later-shu", "前蜀・後蜀", "eastAsia", 3, 907, 965, "前蜀"),
+      p("ea-song", "宋", "eastAsia", 1, 960, 1279, "宋朝"),
+      p("ea-liao", "遼", "eastAsia", 2, 916, 1125, "遼朝"),
+      p("ea-westernxia", "西夏", "eastAsia", 3, 1038, 1227, "西夏"),
+      p("ea-jin-dyn", "金", "eastAsia", 2, 1115, 1234, "金朝"),
+      p("ea-yuan", "元", "eastAsia", 0, 1271, 1368, "元朝"),
+      p("ea-ming", "明", "eastAsia", 0, 1368, 1644, "明朝"),
+      p("ea-qing", "清", "eastAsia", 0, 1644, 1912, "清朝"),
+      p("ea-roc", "中華民國大陸時期", "eastAsia", 0, 1912, 1949, "中華民國大陸時期"),
+      p("ea-prc", "中華人民共和國", "eastAsia", 0, 1949, 2026, "中華人民共和國"),
+
+      p("ne-goguryeo", "高句麗", "northeastAsia", 0, -37, 668, "高句丽"),
+      p("ne-baekje", "百濟", "northeastAsia", 1, -18, 660, "百濟"),
+      p("ne-silla", "新羅", "northeastAsia", 2, -57, 935, "新羅"),
+      p("ne-goryeo", "高麗", "northeastAsia", 0, 918, 1392, "高麗"),
+      p("ne-joseon", "朝鮮王朝", "northeastAsia", 0, 1392, 1897, "朝鮮王朝"),
+      p("ne-korea-modern", "南北韓", "northeastAsia", 0, 1948, 2026, "朝鮮半島"),
+      p("ne-yayoi", "彌生時代", "northeastAsia", 3, -1000, 250, "彌生時代"),
+      p("ne-yamato", "大和政權", "northeastAsia", 3, 250, 710, "大和王權"),
+      p("ne-nara-heian", "奈良・平安", "northeastAsia", 3, 710, 1185, "平安時代"),
+      p("ne-samurai", "鎌倉・室町・戰國", "northeastAsia", 3, 1185, 1603, "日本中世史"),
+      p("ne-edo", "江戶幕府", "northeastAsia", 3, 1603, 1868, "江戶時代"),
+      p("ne-japan-modern", "近現代日本", "northeastAsia", 3, 1868, 2026, "日本历史"),
+      p("ne-ryukyu", "琉球王國", "northeastAsia", 2, 1429, 1879, "琉球國"),
+      p("ne-jurchen", "女真・後金", "northeastAsia", 1, 1115, 1644, "女真"),
+
+      p("ia-xiongnu", "匈奴", "innerAsia", 0, -209, 93, "匈奴"),
+      p("ia-xianbei", "鮮卑", "innerAsia", 1, 93, 439, "鮮卑"),
+      p("ia-rouran", "柔然", "innerAsia", 0, 330, 555, "柔然"),
+      p("ia-turk", "突厥汗國", "innerAsia", 0, 552, 744, "突厥汗国"),
+      p("ia-uyghur", "回鶻汗國", "innerAsia", 0, 744, 840, "回鶻汗國"),
+      p("ia-khitan", "契丹", "innerAsia", 1, 907, 1125, "契丹"),
+      p("ia-mongol", "蒙古帝國", "innerAsia", 0, 1206, 1368, "蒙古帝國"),
+      p("ia-timur", "帖木兒帝國", "innerAsia", 1, 1370, 1507, "帖木儿帝国"),
+      p("ia-dzungar", "準噶爾汗國", "innerAsia", 0, 1634, 1758, "準噶爾汗國"),
+      p("ia-kazakh", "哈薩克汗國", "innerAsia", 2, 1465, 1847, "哈薩克汗國"),
+
+      p("sea-dongson", "東山文化", "southeastAsia", 0, -1000, 100, "東山文化"),
+      p("sea-funan", "扶南", "southeastAsia", 2, 50, 550, "扶南"),
+      p("sea-champa", "占婆", "southeastAsia", 0, 192, 1832, "占城"),
+      p("sea-chenla", "真臘", "southeastAsia", 2, 550, 802, "真臘"),
+      p("sea-khmer", "高棉帝國", "southeastAsia", 2, 802, 1431, "高棉帝国"),
+      p("sea-pagan", "蒲甘王朝", "southeastAsia", 1, 849, 1297, "蒲甘王朝"),
+      p("sea-ava", "阿瓦・東吁・貢榜", "southeastAsia", 1, 1364, 1885, "緬甸君主列表"),
+      p("sea-srivijaya", "室利佛逝", "southeastAsia", 3, 650, 1377, "室利佛逝"),
+      p("sea-majapahit", "滿者伯夷", "southeastAsia", 3, 1293, 1527, "滿者伯夷"),
+      p("sea-vietnam", "越南諸王朝", "southeastAsia", 0, 939, 1945, "越南歷史"),
+      p("sea-ayutthaya", "素可泰・阿瑜陀耶", "southeastAsia", 4, 1238, 1767, "阿瑜陀耶王国"),
+      p("sea-modern", "現代東南亞", "southeastAsia", 0, 1945, 2026, "東南亞"),
+
+      p("sa-indus", "印度河文明", "southAsia", 0, -3300, -1300, "印度河流域文明"),
+      p("sa-vedic", "吠陀時代", "southAsia", 0, -1500, -600, "吠陀時期"),
+      p("sa-mahajanapada", "十六大國", "southAsia", 0, -600, -322, "十六大国"),
+      p("sa-maurya", "孔雀王朝", "southAsia", 0, -322, -185, "孔雀王朝"),
+      p("sa-kushan", "貴霜帝國", "southAsia", 1, 30, 375, "贵霜帝国"),
+      p("sa-gupta", "笈多王朝", "southAsia", 0, 320, 550, "笈多王朝"),
+      p("sa-chola", "朱羅王朝", "southAsia", 2, 300, 1279, "朱羅王朝"),
+      p("sa-delhi", "德里蘇丹國", "southAsia", 0, 1206, 1526, "德里蘇丹國"),
+      p("sa-vijayanagara", "毗奢耶那伽羅", "southAsia", 2, 1336, 1646, "毗奢耶那伽罗王朝"),
+      p("sa-mughal", "蒙兀兒帝國", "southAsia", 0, 1526, 1857, "蒙兀兒帝國"),
+      p("sa-british", "英屬印度", "southAsia", 0, 1858, 1947, "英屬印度"),
+      p("sa-modern", "現代南亞", "southAsia", 0, 1947, 2026, "南亞"),
+
+      p("wa-sumer", "蘇美", "westAsia", 0, -3500, -2004, "苏美尔"),
+      p("wa-akkad", "阿卡德帝國", "westAsia", 0, -2334, -2154, "阿卡德帝國"),
+      p("wa-babylon", "巴比倫", "westAsia", 0, -1894, -539, "巴比倫"),
+      p("wa-assyria", "亞述", "westAsia", 1, -2025, -609, "亞述"),
+      p("wa-hittite", "赫梯", "westAsia", 2, -1650, -1180, "赫梯"),
+      p("wa-achaemenid", "阿契美尼德波斯", "westAsia", 0, -550, -330, "阿契美尼德王朝"),
+      p("wa-seleucid", "塞琉古帝國", "westAsia", 0, -312, -63, "塞琉古帝國"),
+      p("wa-parthian", "安息帝國", "westAsia", 0, -247, 224, "安息帝國"),
+      p("wa-sasanian", "薩珊波斯", "westAsia", 0, 224, 651, "薩珊王朝"),
+      p("wa-caliphate", "阿拉伯帝國", "westAsia", 0, 632, 1258, "阿拉伯帝國"),
+      p("wa-seljuk", "塞爾柱帝國", "westAsia", 1, 1037, 1194, "塞爾柱帝國"),
+      p("wa-ottoman", "鄂圖曼帝國", "westAsia", 0, 1299, 1922, "鄂圖曼帝國"),
+      p("wa-safavid", "薩非波斯", "westAsia", 2, 1501, 1736, "薩非王朝"),
+      p("wa-modern", "現代中東", "westAsia", 0, 1922, 2026, "中東"),
+
+      p("na-egypt-old", "古埃及王國", "northAfrica", 0, -3100, -332, "古埃及"),
+      p("na-kush", "庫施王國", "northAfrica", 1, -1070, 350, "庫施王國"),
+      p("na-ptolemy", "托勒密埃及", "northAfrica", 0, -305, -30, "托勒密王國"),
+      p("na-roman", "羅馬/拜占庭北非", "northAfrica", 0, -30, 698, "阿非利加行省"),
+      p("na-fatimids", "法蒂瑪王朝", "northAfrica", 0, 909, 1171, "法蒂瑪王朝"),
+      p("na-mamluk", "馬木留克", "northAfrica", 0, 1250, 1517, "馬木留克王朝"),
+      p("na-maghreb", "馬格里布諸王朝", "northAfrica", 1, 788, 1830, "馬格里布"),
+      p("na-modern", "現代北非", "northAfrica", 0, 1830, 2026, "北非"),
+
+      p("eu-minoan", "米諾斯文明", "europe", 0, -3100, -1100, "米諾斯文明"),
+      p("eu-mycenaean", "邁錫尼文明", "europe", 1, -1750, -1050, "迈锡尼文明"),
+      p("eu-etruscan", "伊特拉斯坎", "europe", 2, -900, -27, "伊特拉斯坎文明"),
+      p("eu-celts", "凱爾特世界", "europe", 3, -800, 500, "凱爾特人"),
+      p("eu-greece", "古希臘", "europe", 0, -800, -146, "古希腊"),
+      p("eu-macedon", "馬其頓與希臘化", "europe", 1, -359, -168, "馬其頓王國"),
+      p("eu-rome", "羅馬共和/帝國", "europe", 0, -509, 476, "古羅馬"),
+      p("eu-byzantine", "拜占庭帝國", "europe", 1, 330, 1453, "拜占庭帝國"),
+      p("eu-goths", "哥德與日耳曼王國", "europe", 2, 375, 711, "日耳曼王國"),
+      p("eu-franks", "法蘭克王國", "europe", 2, 481, 843, "法蘭克王國"),
+      p("eu-vikings", "維京時代", "europe", 3, 793, 1066, "維京時代"),
+      p("eu-papal", "教宗國", "europe", 4, 756, 1870, "教宗國"),
+      p("eu-hre", "神聖羅馬帝國", "europe", 2, 962, 1806, "神聖羅馬帝國"),
+      p("eu-england", "英格蘭/英國", "europe", 3, 927, 2026, "英國歷史"),
+      p("eu-france", "法蘭西", "europe", 4, 987, 2026, "法国历史"),
+      p("eu-spain", "西班牙", "europe", 5, 1479, 2026, "西班牙歷史"),
+      p("eu-russia", "俄羅斯", "europe", 1, 862, 2026, "俄羅斯歷史"),
+      p("eu-portugal", "葡萄牙海權", "europe", 6, 1139, 2026, "葡萄牙歷史"),
+      p("eu-venice", "威尼斯共和國", "europe", 7, 697, 1797, "威尼斯共和國"),
+      p("eu-habsburg", "哈布斯堡/奧地利", "europe", 8, 1278, 1918, "哈布斯堡王朝"),
+      p("eu-polish-lithuanian", "波蘭立陶宛", "europe", 6, 1386, 1795, "波蘭立陶宛聯邦"),
+      p("eu-dutch", "荷蘭共和與海權", "europe", 7, 1581, 1795, "荷蘭共和國"),
+      p("eu-prussia-germany", "普魯士/德意志", "europe", 8, 1525, 2026, "德國歷史"),
+      p("eu-napoleonic", "拿破崙時代", "europe", 0, 1799, 1815, "拿破崙戰爭"),
+      p("eu-eu-integration", "歐洲整合", "europe", 6, 1951, 2026, "歐洲一體化"),
+      p("eu-modern", "近現代歐洲秩序", "europe", 0, 1789, 2026, "歐洲歷史"),
+
+      p("ssa-nok", "諾克文化", "subSaharanAfrica", 0, -1500, 500, "諾克文化"),
+      p("ssa-aksum", "阿克蘇姆", "subSaharanAfrica", 1, 100, 940, "阿克蘇姆王國"),
+      p("ssa-ghana", "迦納帝國", "subSaharanAfrica", 0, 300, 1200, "迦納帝國"),
+      p("ssa-mali", "馬利帝國", "subSaharanAfrica", 0, 1235, 1670, "馬里帝國"),
+      p("ssa-songhai", "桑海帝國", "subSaharanAfrica", 0, 1464, 1591, "桑海帝國"),
+      p("ssa-ethiopia", "衣索比亞", "subSaharanAfrica", 1, 1270, 1974, "埃塞俄比亚帝国"),
+      p("ssa-kongo", "剛果王國", "subSaharanAfrica", 2, 1390, 1914, "剛果王國"),
+      p("ssa-zimbabwe", "大辛巴威", "subSaharanAfrica", 3, 1220, 1450, "大津巴布韋"),
+      p("ssa-zulu", "祖魯王國", "subSaharanAfrica", 4, 1816, 1897, "祖魯王國"),
+      p("ssa-modern", "非洲獨立浪潮", "subSaharanAfrica", 0, 1957, 2026, "非洲去殖民化"),
+
+      p("am-olmec", "奧爾梅克", "americas", 0, -1600, -400, "奧爾梅克"),
+      p("am-maya", "馬雅文明", "americas", 0, -2000, 1697, "瑪雅文明"),
+      p("am-teotihuacan", "特奧蒂瓦坎", "americas", 1, -100, 550, "特奧蒂瓦坎"),
+      p("am-aztec", "阿茲特克帝國", "americas", 0, 1428, 1521, "阿茲特克帝國"),
+      p("am-inca", "印加帝國", "americas", 2, 1438, 1533, "印加帝國"),
+      p("am-mississippian", "密西西比文化", "americas", 3, 800, 1600, "密西西比文化"),
+      p("am-colonies", "歐洲殖民美洲", "americas", 0, 1492, 1825, "美洲殖民"),
+      p("am-usa", "美國", "americas", 1, 1776, 2026, "美国历史"),
+      p("am-latin", "拉丁美洲國家", "americas", 2, 1810, 2026, "拉丁美洲历史"),
+      p("am-canada", "加拿大", "americas", 3, 1867, 2026, "加拿大歷史"),
+
+      p("oc-aboriginal", "澳洲原住民", "oceania", 0, -3500, 2026, "澳洲原住民"),
+      p("oc-lapita", "拉匹塔文化", "oceania", 1, -1600, -500, "拉匹塔文化"),
+      p("oc-polynesia", "波里尼西亞擴散", "oceania", 1, -1000, 1500, "波利尼西亞"),
+      p("oc-hawaii", "夏威夷王國", "oceania", 2, 1795, 1893, "夏威夷王國"),
+      p("oc-maori", "毛利與紐西蘭", "oceania", 2, 1250, 2026, "毛利人"),
+      p("oc-modern", "現代大洋洲", "oceania", 0, 1901, 2026, "大洋洲"),
+
+      p("gl-silk", "絲路網絡", "global", 0, -130, 1450, "絲綢之路"),
+      p("gl-buddhism", "佛教傳播", "global", 1, -500, 1200, "佛教的歷史"),
+      p("gl-islam", "伊斯蘭世界", "global", 2, 622, 2026, "伊斯蘭世界"),
+      p("gl-age-sail", "大航海與哥倫布交換", "global", 0, 1450, 1750, "地理大发现"),
+      p("gl-colonial", "殖民帝國體系", "global", 1, 1500, 1975, "殖民帝國"),
+      p("gl-industrial", "工業革命", "global", 2, 1760, 1914, "工業革命"),
+      p("gl-ww", "世界大戰時代", "global", 0, 1914, 1945, "世界大戰"),
+      p("gl-coldwar", "冷戰", "global", 1, 1947, 1991, "冷戰"),
+      p("gl-globalization", "全球化", "global", 2, 1991, 2026, "全球化")
+    ];
+
+    const influences = [
+      inf("inf-alexander", "亞歷山大東征與希臘化", -336, -30, "europe", "westAsia", 3, "希臘化時代"),
+      inf("inf-rome", "羅馬地中海秩序", -200, 476, "northAfrica", "europe", 2, "羅馬帝國"),
+      inf("inf-han-silk", "漢與絲路開通", -130, 220, "eastAsia", "westAsia", 1, "丝绸之路"),
+      inf("inf-buddhist", "佛教跨亞洲傳播", -250, 900, "southAsia", "northeastAsia", 1, "佛教的歷史"),
+      inf("inf-islam-rule", "阿拉伯帝國核心統治", 632, 900, "westAsia", "northAfrica", 3, "阿拉伯帝國"),
+      inf("inf-islam-spread", "伊斯蘭文化與貿易網絡", 700, 1500, "westAsia", "southeastAsia", 1, "伊斯蘭世界"),
+      inf("inf-mongol-core", "蒙古帝國與四大汗國", 1206, 1368, "innerAsia", "westAsia", 3, "蒙古帝國"),
+      inf("inf-mongol-pressure", "蒙古軍事壓力", 1220, 1300, "eastAsia", "europe", 2, "蒙古西征"),
+      inf("inf-pax-mongolica", "蒙古時代歐亞交流", 1250, 1350, "eastAsia", "europe", 1, "蒙古治世"),
+      inf("inf-ottoman", "鄂圖曼地中海與中東秩序", 1453, 1918, "westAsia", "europe", 2, "鄂圖曼帝國"),
+      inf("inf-age-sail", "大航海與海上帝國", 1450, 1750, "europe", "americas", 2, "地理大发现"),
+      inf("inf-colonial", "歐洲殖民與全球貿易", 1500, 1975, "europe", "oceania", 2, "殖民帝國"),
+      inf("inf-atlantic", "大西洋奴隸貿易", 1500, 1888, "subSaharanAfrica", "americas", 2, "大西洋奴隸貿易"),
+      inf("inf-industrial", "工業革命外溢", 1760, 1914, "europe", "global", 1, "工業革命"),
+      inf("inf-ww1", "第一次世界大戰", 1914, 1918, "europe", "global", 2, "第一次世界大战"),
+      inf("inf-ww2", "第二次世界大戰", 1939, 1945, "eastAsia", "global", 3, "第二次世界大战"),
+      inf("inf-coldwar", "冷戰陣營與代理戰爭", 1947, 1991, "eastAsia", "global", 2, "冷戰"),
+      inf("inf-globalization", "全球化網絡", 1991, 2026, "eastAsia", "global", 1, "全球化")
+    ];
+
+    const events = [
+      e("tw-fort", "熱蘭遮城建立", 1624, "taiwan", 0, "熱蘭遮城"),
+      e("tw-dapenkeng-event", "大坌坑文化擴散", -4000, "taiwan", 1, "大坌坑文化"),
+      e("tw-beinan-event", "卑南遺址文化層", -1000, "taiwan", 2, "卑南遺址"),
+      e("tw-shihsanhang-event", "十三行鐵器文化", 500, "taiwan", 3, "十三行文化"),
+      e("tw-koxinga", "鄭成功攻台", 1661, "taiwan", 0, "鄭成功攻臺之役"),
+      e("tw-qing", "清朝納台", 1683, "taiwan", 0, "澎湖海戰"),
+      e("tw-mudan", "牡丹社事件", 1874, "taiwan", 1, "牡丹社事件"),
+      e("tw-province", "台灣建省", 1885, "taiwan", 2, "福建臺灣省"),
+      e("tw-treaty", "馬關條約割讓台灣", 1895, "taiwan", 0, "馬關條約"),
+      e("tw-tapani", "噍吧哖事件", 1915, "taiwan", 1, "噍吧哖事件"),
+      e("tw-wushe", "霧社事件", 1930, "taiwan", 1, "霧社事件"),
+      e("tw-228", "二二八事件", 1947, "taiwan", 0, "二二八事件"),
+      e("tw-white-terror-event", "白色恐怖高峰", 1950, "taiwan", 1, "臺灣白色恐怖時期"),
+      e("tw-martial", "解除戒嚴", 1987, "taiwan", 0, "臺灣省戒嚴令"),
+      e("tw-election", "首次總統直選", 1996, "taiwan", 0, "1996年中華民國總統選舉"),
+      e("tw-party", "首次政黨輪替", 2000, "taiwan", 0, "2000年中華民國總統選舉"),
+
+      e("ea-qin-unify", "秦統一六國", -221, "eastAsia", 0, "秦滅六國之戰"),
+      e("ea-chunqiu-start", "平王東遷", -770, "eastAsia", 0, "平王東遷"),
+      e("ea-chengpu", "城濮之戰", -632, "eastAsia", 2, "城濮之戰"),
+      e("ea-goujian", "越王勾踐滅吳", -473, "eastAsia", 3, "勾踐"),
+      e("ea-jin-partition", "三家分晉", -403, "eastAsia", 2, "三家分晉"),
+      e("ea-shangyang", "商鞅變法", -356, "eastAsia", 4, "商鞅變法"),
+      e("ea-changping", "長平之戰", -260, "eastAsia", 4, "長平之戰"),
+      e("ea-silk", "張騫出使西域", -138, "eastAsia", 0, "張騫"),
+      e("ea-paper", "蔡倫改良造紙", 105, "eastAsia", 0, "蔡倫"),
+      e("ea-redcliffs", "赤壁之戰", 208, "eastAsia", 0, "赤壁之戰"),
+      e("ea-wei-founded", "曹丕稱帝", 220, "eastAsia", 1, "曹丕"),
+      e("ea-shu-founded", "劉備稱帝", 221, "eastAsia", 2, "劉備"),
+      e("ea-wu-founded", "孫權稱帝", 229, "eastAsia", 3, "孫權"),
+      e("ea-wu-fall", "西晉滅吳", 280, "eastAsia", 3, "晉滅吳之戰"),
+      e("ea-sui-canal", "大運河開鑿", 605, "eastAsia", 0, "京杭大運河"),
+      e("ea-anlushan", "安史之亂", 755, "eastAsia", 0, "安史之亂"),
+      e("ea-gunpowder", "火藥軍事化", 900, "eastAsia", 0, "火藥"),
+      e("ea-zhu-wen", "朱溫篡唐", 907, "eastAsia", 0, "朱溫"),
+      e("ea-chenqiao", "陳橋兵變", 960, "eastAsia", 0, "陳橋兵變"),
+      e("ea-yuan", "忽必烈建立元朝", 1271, "eastAsia", 0, "忽必烈"),
+      e("ea-zhenghe", "鄭和下西洋", 1405, "eastAsia", 0, "鄭和下西洋"),
+      e("ea-1911", "辛亥革命", 1911, "eastAsia", 0, "辛亥革命"),
+      e("ea-1949", "中華人民共和國成立", 1949, "eastAsia", 0, "中華人民共和國開國大典"),
+
+      e("ne-buddhism-jp", "佛教傳入日本", 552, "northeastAsia", 3, "日本佛教"),
+      e("ne-taika", "大化改新", 645, "northeastAsia", 3, "大化改新"),
+      e("ne-goryeo", "高麗建國", 918, "northeastAsia", 0, "高麗"),
+      e("ne-hangul", "訓民正音頒布", 1446, "northeastAsia", 0, "訓民正音"),
+      e("ne-meiji", "明治維新", 1868, "northeastAsia", 3, "明治維新"),
+      e("ne-koreanwar", "韓戰爆發", 1950, "northeastAsia", 0, "朝鲜战争"),
+
+      e("ia-xiongnu", "冒頓單于", -209, "innerAsia", 0, "冒頓單于"),
+      e("ia-turk", "突厥汗國建立", 552, "innerAsia", 0, "突厥汗国"),
+      e("ia-chinggis", "成吉思汗統一蒙古", 1206, "innerAsia", 0, "成吉思汗"),
+      e("ia-baghdad", "蒙古攻陷巴格達", 1258, "innerAsia", 0, "旭烈兀西征"),
+      e("ia-timur", "帖木兒建立帝國", 1370, "innerAsia", 1, "帖木兒帝國"),
+
+      e("sea-angkor", "吳哥王城興盛", 1113, "southeastAsia", 2, "吳哥窟"),
+      e("sea-pagan", "蒲甘佛塔時代", 1057, "southeastAsia", 1, "蒲甘王朝"),
+      e("sea-majapahit", "滿者伯夷擴張", 1350, "southeastAsia", 3, "滿者伯夷"),
+      e("sea-malacca", "麻六甲蘇丹國興起", 1400, "southeastAsia", 3, "馬六甲蘇丹王朝"),
+      e("sea-independ", "東南亞去殖民化", 1945, "southeastAsia", 0, "東南亞歷史"),
+
+      e("sa-harappa", "哈拉帕城市興起", -2600, "southAsia", 0, "哈拉帕"),
+      e("sa-buddha", "釋迦牟尼活動", -500, "southAsia", 0, "释迦牟尼"),
+      e("sa-ashoka", "阿育王即位", -268, "southAsia", 0, "阿育王"),
+      e("sa-gupta", "笈多黃金時代", 375, "southAsia", 0, "笈多王朝"),
+      e("sa-mughal", "巴布爾建立蒙兀兒", 1526, "southAsia", 0, "巴布爾"),
+      e("sa-independence", "印度與巴基斯坦分治", 1947, "southAsia", 0, "印巴分治"),
+
+      e("wa-cuneiform", "楔形文字", -3200, "westAsia", 0, "楔形文字"),
+      e("wa-hammurabi", "漢摩拉比法典", -1754, "westAsia", 0, "漢摩拉比法典"),
+      e("wa-cyrus", "居魯士建立波斯帝國", -550, "westAsia", 0, "居鲁士大帝"),
+      e("wa-alexander", "亞歷山大征服波斯", -330, "westAsia", 0, "亞歷山大大帝"),
+      e("wa-hijra", "希吉拉", 622, "westAsia", 0, "希吉拉"),
+      e("wa-baghdad", "巴格達建城", 762, "westAsia", 0, "巴格達"),
+      e("wa-1453", "君士坦丁堡陷落", 1453, "westAsia", 0, "君士坦丁堡的陷落"),
+      e("wa-ww1", "鄂圖曼帝國解體", 1922, "westAsia", 0, "鄂圖曼帝國的分裂"),
+
+      e("na-unification", "上下埃及統一", -3100, "northAfrica", 0, "古埃及"),
+      e("na-pyramid", "吉薩金字塔", -2560, "northAfrica", 0, "吉薩金字塔群"),
+      e("na-alexandria", "亞歷山卓建城", -331, "northAfrica", 0, "亞歷山卓"),
+      e("na-fatimid", "開羅建城", 969, "northAfrica", 0, "開羅"),
+      e("na-suez", "蘇伊士運河通航", 1869, "northAfrica", 0, "蘇伊士運河"),
+
+      e("eu-athens", "雅典民主改革", -508, "europe", 0, "克里斯提尼"),
+      e("eu-homeric", "希臘城邦形成", -800, "europe", 0, "古希腊城邦"),
+      e("eu-rome", "羅馬共和建立", -509, "europe", 0, "羅馬共和國"),
+      e("eu-alexander", "亞歷山大東征", -334, "europe", 1, "亞歷山大東征"),
+      e("eu-punic", "第二次布匿戰爭", -218, "europe", 0, "第二次布匿戰爭"),
+      e("eu-caesar", "凱撒遇刺", -44, "europe", 0, "凱撒遇刺"),
+      e("eu-westfall", "西羅馬帝國滅亡", 476, "europe", 0, "西羅馬帝國的衰亡"),
+      e("eu-charlemagne", "查理曼加冕", 800, "europe", 2, "查理曼"),
+      e("eu-viking-lindisfarne", "維京襲擊林迪斯法恩", 793, "europe", 3, "林迪斯法恩"),
+      e("eu-kievan", "基輔羅斯形成", 882, "europe", 1, "基輔羅斯"),
+      e("eu-hastings", "黑斯廷斯戰役", 1066, "europe", 3, "黑斯廷斯戰役"),
+      e("eu-crusade", "第一次十字軍東征", 1096, "europe", 4, "第一次十字軍東征"),
+      e("eu-magna-carta", "大憲章", 1215, "europe", 3, "大憲章"),
+      e("eu-venice-1204", "第四次十字軍攻陷君士坦丁堡", 1204, "europe", 7, "第四次十字軍東征"),
+      e("eu-blackdeath-eu", "黑死病席捲歐洲", 1347, "europe", 0, "黑死病"),
+      e("eu-renaissance", "文藝復興", 1400, "europe", 0, "文藝復興"),
+      e("eu-constantinople", "君士坦丁堡陷落", 1453, "europe", 1, "君士坦丁堡的陷落"),
+      e("eu-columbus", "哥倫布航行", 1492, "europe", 5, "克里斯托弗·哥伦布"),
+      e("eu-reformation", "宗教改革", 1517, "europe", 2, "宗教改革"),
+      e("eu-dutch-revolt", "荷蘭獨立戰爭", 1568, "europe", 7, "八十年戰爭"),
+      e("eu-westphalia", "西發里亞和約", 1648, "europe", 2, "威斯特伐利亚和约"),
+      e("eu-glorious", "光榮革命", 1688, "europe", 3, "光榮革命"),
+      e("eu-frenchrev", "法國大革命", 1789, "europe", 4, "法国大革命"),
+      e("eu-vienna", "維也納會議", 1815, "europe", 8, "維也納會議"),
+      e("eu-1848", "1848年革命", 1848, "europe", 0, "1848年革命"),
+      e("eu-german-unify", "德意志統一", 1871, "europe", 8, "德意志統一"),
+      e("eu-eu", "歐盟成立", 1993, "europe", 0, "欧洲联盟"),
+
+      e("ssa-aksum", "阿克蘇姆鑄幣", 270, "subSaharanAfrica", 1, "阿克蘇姆王國"),
+      e("ssa-mansa", "曼薩穆薩朝覲", 1324, "subSaharanAfrica", 0, "曼萨·穆萨"),
+      e("ssa-songhai", "桑海攻佔廷巴克圖", 1468, "subSaharanAfrica", 0, "桑海帝國"),
+      e("ssa-berlin", "柏林會議", 1884, "subSaharanAfrica", 0, "柏林會議_(1884年)"),
+      e("ssa-ghana-ind", "迦納獨立", 1957, "subSaharanAfrica", 0, "迦納"),
+
+      e("am-olmec-heads", "奧爾梅克巨石頭像", -900, "americas", 0, "奧爾梅克巨石頭像"),
+      e("am-maya-classic", "馬雅古典期", 250, "americas", 0, "瑪雅文明"),
+      e("am-tenochtitlan", "特諾奇提特蘭建立", 1325, "americas", 0, "特諾奇蒂特蘭"),
+      e("am-columbus", "哥倫布抵達美洲", 1492, "americas", 0, "克里斯托弗·哥伦布"),
+      e("am-inca-fall", "西班牙征服印加", 1533, "americas", 2, "西班牙征服印加帝國"),
+      e("am-usa-ind", "美國獨立宣言", 1776, "americas", 1, "美国独立宣言"),
+      e("am-mexico", "墨西哥獨立", 1821, "americas", 2, "墨西哥独立战争"),
+
+      e("oc-lapita", "拉匹塔擴散", -1200, "oceania", 1, "拉匹塔文化"),
+      e("oc-nz", "毛利抵達紐西蘭", 1250, "oceania", 2, "毛利人"),
+      e("oc-hawaii", "夏威夷王國統一", 1795, "oceania", 2, "夏威夷王國"),
+      e("oc-aus", "澳洲聯邦成立", 1901, "oceania", 0, "澳大利亚联邦"),
+
+      e("gl-silk", "絲路開通", -130, "global", 0, "丝绸之路"),
+      e("gl-blackdeath", "黑死病跨歐亞傳播", 1347, "global", 0, "黑死病"),
+      e("gl-print", "活字印刷術傳入歐洲", 1450, "global", 0, "印刷機"),
+      e("gl-columbian", "哥倫布大交換", 1492, "global", 0, "哥倫布大交換"),
+      e("gl-steam", "瓦特改良蒸汽機", 1769, "global", 2, "詹姆斯·瓦特"),
+      e("gl-ww1", "第一次世界大戰爆發", 1914, "global", 0, "第一次世界大战"),
+      e("gl-un", "聯合國成立", 1945, "global", 0, "联合国"),
+      e("gl-internet", "全球資訊網公開", 1991, "global", 2, "全球資訊網")
+    ];
+
+    const regionById = new Map(regions.map((region, index) => [region.id, { ...region, index }]));
+    const canvas = document.getElementById("timeline");
+    const app = document.getElementById("app");
+    const ctx = canvas.getContext("2d");
+    const minimap = document.getElementById("minimap");
+    const mctx = minimap.getContext("2d");
+    const tooltip = document.getElementById("tooltip");
+    const suggestions = document.getElementById("suggestions");
+    const searchInput = document.getElementById("searchInput");
+
+    let regionLayout = [];
+    let hits = [];
+    let axisHits = [];
+    let hovered = null;
+    let focused = null;
+    const hiddenRegions = new Set();
+    let isDragging = false;
+    let minimapDragging = false;
+    let dragStart = { x: 0, y: 0, tx: 0, ty: 0 };
+
+    const viewport = {
+      dpr: 1,
+      width: 0,
+      height: 0,
+      tx: 0,
+      ty: 0,
+      scale: 0.24,
+      minScale: 0.12,
+      maxScale: 2.8
+    };
+
+    function p(id, name, region, lane, start, end, wikiTitle) {
+      return { id, name, region, lane, start, end, wiki: wiki(wikiTitle || name) };
+    }
+
+    function inf(id, name, start, end, from, to, level, wikiTitle) {
+      return { id, name, start, end, from, to, level, wiki: wiki(wikiTitle || name) };
+    }
+
+    function e(id, name, year, region, lane, wikiTitle) {
+      return { id, name, year, region, lane, wiki: wiki(wikiTitle || name) };
+    }
+
+    function computeLayout() {
+      let x = WORLD.left;
+      const visibleRegions = regions.filter((region) => !hiddenRegions.has(region.id));
+      regionLayout = visibleRegions.map((region) => {
+        const layout = { ...region, x, width: WORLD.regionWidth, right: x + WORLD.regionWidth };
+        x += WORLD.regionWidth + WORLD.gap;
+        return layout;
+      });
+      const count = Math.max(1, visibleRegions.length);
+      WORLD.width = WORLD.left + WORLD.right + count * WORLD.regionWidth + Math.max(0, count - 1) * WORLD.gap;
+      WORLD.totalHeight = WORLD.top + WORLD.height + WORLD.bottom;
+    }
+
+    function regionInfo(id) {
+      return regionLayout.find((region) => region.id === id);
+    }
+
+    function yearToY(year) {
+      const t = (YEAR_MAX - year) / (YEAR_MAX - YEAR_MIN);
+      return WORLD.top + t * WORLD.height;
+    }
+
+    function yToYear(y) {
+      const t = (y - WORLD.top) / WORLD.height;
+      return Math.round(YEAR_MAX - t * (YEAR_MAX - YEAR_MIN));
+    }
+
+    function yearPixels() {
+      return (WORLD.height / (YEAR_MAX - YEAR_MIN)) * viewport.scale;
+    }
+
+    function tickSteps() {
+      const px = yearPixels();
+      if (px >= 11) return { major: 10, minor: 1, label: 5 };
+      if (px >= 6) return { major: 25, minor: 5, label: 10 };
+      if (px >= 3) return { major: 50, minor: 10, label: 25 };
+      if (px >= 1.4) return { major: 100, minor: 25, label: 50 };
+      if (px >= .65) return { major: 250, minor: 50, label: 100 };
+      return { major: 500, minor: 100, label: 500 };
+    }
+
+    function alignedStart(step) {
+      return Math.ceil(YEAR_MIN / step) * step;
+    }
+
+    function screenToWorld(x, y) {
+      return {
+        x: (x - viewport.tx) / viewport.scale,
+        y: (y - viewport.ty) / viewport.scale
+      };
+    }
+
+    function worldToScreen(x, y) {
+      return {
+        x: x * viewport.scale + viewport.tx,
+        y: y * viewport.scale + viewport.ty
+      };
+    }
+
+    function clampViewport() {
+      const minTx = viewport.width - WORLD.width * viewport.scale - 80;
+      const maxTx = 80;
+      const minTy = viewport.height - WORLD.totalHeight * viewport.scale - 80;
+      const maxTy = 80;
+      viewport.tx = Math.min(maxTx, Math.max(minTx, viewport.tx));
+      viewport.ty = Math.min(maxTy, Math.max(minTy, viewport.ty));
+    }
+
+    function fitAll() {
+      const scaleX = viewport.width / WORLD.width;
+      const scaleY = viewport.height / WORLD.totalHeight;
+      viewport.scale = Math.min(scaleX, scaleY) * 0.94;
+      viewport.minScale = viewport.scale * 0.76;
+      viewport.tx = (viewport.width - WORLD.width * viewport.scale) / 2;
+      viewport.ty = (viewport.height - WORLD.totalHeight * viewport.scale) / 2;
+      draw();
+    }
+
+    function initialView() {
+      if (viewport.width < 760) {
+        fitAll();
+        return;
+      }
+      const fitWidth = (viewport.width / WORLD.width) * 0.92;
+      viewport.scale = Math.min(0.56, Math.max(0.34, fitWidth));
+      viewport.minScale = Math.min(viewport.scale * 0.5, (viewport.height / WORLD.totalHeight) * 0.72);
+      viewport.tx = (viewport.width - WORLD.width * viewport.scale) / 2;
+      viewport.ty = viewport.height / 2 - yearToY(700) * viewport.scale;
+      clampViewport();
+      draw();
+    }
+
+    function zoomAt(cx, cy, factor) {
+      const before = screenToWorld(cx, cy);
+      viewport.scale = Math.min(viewport.maxScale, Math.max(viewport.minScale, viewport.scale * factor));
+      viewport.tx = cx - before.x * viewport.scale;
+      viewport.ty = cy - before.y * viewport.scale;
+      clampViewport();
+      draw();
+    }
+
+    function focusWorld(x, y, scale = Math.max(viewport.scale, 0.62)) {
+      viewport.scale = Math.min(viewport.maxScale, Math.max(viewport.minScale, scale));
+      viewport.tx = viewport.width / 2 - x * viewport.scale;
+      viewport.ty = viewport.height / 2 - y * viewport.scale;
+      clampViewport();
+      draw();
+    }
+
+    function laneBox(item) {
+      const region = regionInfo(item.region);
+      if (!region) return null;
+      const laneGap = 5;
+      if (isDominantPolity(item)) {
+        return { x: region.x + laneGap, width: region.width - laneGap * 2, region };
+      }
+      const laneWidth = (region.width - laneGap * (region.lanes + 1)) / region.lanes;
+      const x = region.x + laneGap + item.lane * (laneWidth + laneGap);
+      return { x, width: laneWidth, region };
+    }
+
+    function isDominantPolity(item) {
+      if (typeof item.start !== "number" || typeof item.end !== "number") return false;
+      if (item.lane !== 0) return false;
+      return !polities.some((other) => {
+        if (other.id === item.id || other.region !== item.region) return false;
+        const overlap = Math.min(item.end, other.end) - Math.max(item.start, other.start);
+        return overlap > 20;
+      });
+    }
+
+    function formatYear(year) {
+      if (year < 0) return `西元前 ${Math.abs(year)}`;
+      return `西元 ${year}`;
+    }
+
+    function draw() {
+      ctx.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
+      ctx.clearRect(0, 0, viewport.width, viewport.height);
+      ctx.save();
+      ctx.translate(viewport.tx, viewport.ty);
+      ctx.scale(viewport.scale, viewport.scale);
+      drawWorld(ctx, false);
+      ctx.restore();
+      drawFixedAxes();
+      drawMinimap();
+    }
+
+    function drawWorld(context, mini) {
+      hits = mini ? hits : [];
+      drawBackground(context, mini);
+      drawYearGrid(context, mini);
+      drawRegions(context, mini);
+      drawInfluences(context, mini);
+      drawPolities(context, mini);
+      drawEvents(context, mini);
+      drawFocus(context, mini);
+    }
+
+    function drawBackground(context, mini) {
+      context.fillStyle = "#f7f0df";
+      context.fillRect(0, 0, WORLD.width, WORLD.totalHeight);
+      context.fillStyle = "rgba(116, 94, 58, .08)";
+      context.fillRect(WORLD.left - 44, WORLD.top, 34, WORLD.height);
+      if (!mini) {
+        context.fillStyle = "#2e281f";
+        context.font = "700 38px 'Microsoft JhengHei', sans-serif";
+        context.fillText("WORLD HISTORY", WORLD.left, 54);
+        context.font = "600 18px 'Microsoft JhengHei', sans-serif";
+        context.fillStyle = "#6a5a42";
+        context.fillText("西元前 3500 - 西元 2026，古代在下，現代在上", WORLD.left, 78);
+      }
+    }
+
+    function drawYearGrid(context, mini) {
+      const steps = mini ? { major: 500, minor: 250, label: 500 } : tickSteps();
+      context.textAlign = "right";
+      context.textBaseline = "middle";
+      for (let year = alignedStart(steps.minor); year <= YEAR_MAX; year += steps.minor) {
+        const y = yearToY(year);
+        const isMajor = year % steps.major === 0;
+        context.strokeStyle = isMajor ? "rgba(61, 48, 31, .28)" : "rgba(61, 48, 31, .09)";
+        context.lineWidth = isMajor ? 1.2 : .7;
+        context.beginPath();
+        context.moveTo(WORLD.left - 12, y);
+        context.lineTo(WORLD.width - WORLD.right + 14, y);
+        context.stroke();
+        if (!mini && year % steps.label === 0) {
+          context.fillStyle = "#5f513d";
+          context.font = steps.label <= 25 ? "600 12px 'Microsoft JhengHei', sans-serif" : "600 18px 'Microsoft JhengHei', sans-serif";
+          context.fillText(year < 0 ? `前${Math.abs(year)}` : `${year}`, WORLD.left - 20, y);
+        }
+      }
+      const nowY = yearToY(2026);
+      context.strokeStyle = "rgba(30, 30, 30, .38)";
+      context.beginPath();
+      context.moveTo(WORLD.left - 12, nowY);
+      context.lineTo(WORLD.width - WORLD.right + 14, nowY);
+      context.stroke();
+    }
+
+    function drawRegions(context, mini) {
+      regionLayout.forEach((region) => {
+        context.fillStyle = hexToRgba(region.color, mini ? .09 : .075);
+        context.fillRect(region.x, WORLD.top, region.width, WORLD.height);
+        context.strokeStyle = "rgba(43, 34, 22, .24)";
+        context.lineWidth = 1.5;
+        context.strokeRect(region.x, WORLD.top, region.width, WORLD.height);
+
+        const laneGap = 5;
+        const laneWidth = (region.width - laneGap * (region.lanes + 1)) / region.lanes;
+        for (let i = 1; i < region.lanes; i++) {
+          const x = region.x + laneGap + i * (laneWidth + laneGap) - laneGap / 2;
+          context.strokeStyle = "rgba(40, 31, 20, .12)";
+          context.beginPath();
+          context.moveTo(x, WORLD.top);
+          context.lineTo(x, WORLD.top + WORLD.height);
+          context.stroke();
+        }
+
+        if (!mini) {
+          context.save();
+          context.translate(region.x + region.width / 2, WORLD.top - 14);
+          context.textAlign = "center";
+          context.textBaseline = "bottom";
+          context.fillStyle = "#2c251a";
+          context.font = "700 18px 'Microsoft JhengHei', sans-serif";
+          context.fillText(region.name, 0, 0);
+          context.restore();
+        }
+      });
+    }
+
+    function drawInfluences(context, mini) {
+      influences.forEach((item) => {
+        const from = regionInfo(item.from);
+        const to = regionInfo(item.to);
+        if (!from || !to) return;
+        const x = Math.min(from.x, to.x);
+        const right = Math.max(from.right, to.right);
+        const y1 = yearToY(item.end);
+        const y2 = yearToY(item.start);
+        const alpha = item.level === 3 ? .34 : item.level === 2 ? .2 : .11;
+        context.fillStyle = `rgba(43, 43, 43, ${mini ? alpha * 1.4 : alpha})`;
+        roundRect(context, x + 2, y1, right - x - 4, Math.max(2, y2 - y1), mini ? 1 : 8);
+        context.fill();
+        context.strokeStyle = item.level === 3 ? "rgba(30,30,30,.52)" : "rgba(30,30,30,.24)";
+        context.setLineDash(item.level === 1 ? [10, 10] : []);
+        context.stroke();
+        context.setLineDash([]);
+        if (!mini && y2 - y1 > 30) {
+          context.save();
+          context.globalAlpha = .82;
+          context.fillStyle = "#29251e";
+          context.font = "700 15px 'Microsoft JhengHei', sans-serif";
+          context.textAlign = "left";
+          context.textBaseline = "top";
+          context.fillText(item.name, x + 10, y1 + 8);
+          context.restore();
+        }
+      });
+    }
+
+    function drawPolities(context, mini) {
+      polities.forEach((item) => {
+        if (hiddenRegions.has(item.region)) return;
+        const box = laneBox(item);
+        if (!box) return;
+        const region = box.region;
+        const y1 = yearToY(item.end);
+        const y2 = yearToY(item.start);
+        const h = Math.max(5, y2 - y1);
+        const isFocused = focused && focused.id === item.id;
+        context.fillStyle = hexToRgba(region.color, mini ? .72 : .82);
+        roundRect(context, box.x, y1, box.width, h, mini ? 1 : 4);
+        context.fill();
+        context.strokeStyle = isFocused ? "#111" : "rgba(33, 26, 18, .48)";
+        context.lineWidth = isFocused ? 4 : 1.2;
+        context.stroke();
+
+        if (!mini) {
+          drawPolityLabel(context, item, box, y1, h, region);
+          hits.push({ type: "polity", item, x: box.x, y: y1, w: box.width, h });
+        }
+      });
+    }
+
+    function drawPolityLabel(context, item, box, y, height, region) {
+      if (height < 8 || box.width < 10) return;
+      context.save();
+      context.beginPath();
+      context.rect(box.x + 2, y + 2, box.width - 4, height - 4);
+      context.clip();
+      context.fillStyle = readableText(region.color);
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+
+      const name = item.name;
+      const horizontalSize = Math.max(9, Math.min(18, Math.min(box.width / Math.max(2, name.length * .78), height / 2.2)));
+      context.font = `800 ${horizontalSize}px 'Microsoft JhengHei', sans-serif`;
+      const horizontalFits = context.measureText(name).width <= box.width - 8 && height >= horizontalSize + 8;
+      const verticalSize = Math.max(8, Math.min(15, Math.min(box.width - 6, height / Math.max(2, name.length) * .95)));
+      const verticalFits = height >= name.length * verticalSize * .82 + 8 && box.width >= verticalSize + 6;
+
+      if (horizontalFits) {
+        context.font = `800 ${horizontalSize}px 'Microsoft JhengHei', sans-serif`;
+        context.fillText(name, box.x + box.width / 2, y + height / 2);
+      } else if (verticalFits) {
+        drawVerticalText(context, name, box.x + box.width / 2, y + height / 2, verticalSize);
+      } else if (height >= 14 && box.width >= 14) {
+        const compact = name.length > 4 ? `${name.slice(0, 3)}…` : name;
+        const compactSize = Math.max(8, Math.min(12, box.width / Math.max(1.4, compact.length * .72), height - 4));
+        context.font = `800 ${compactSize}px 'Microsoft JhengHei', sans-serif`;
+        if (context.measureText(compact).width <= box.width - 4) {
+          context.fillText(compact, box.x + box.width / 2, y + height / 2);
+        } else {
+          drawVerticalText(context, compact.replace("…", ""), box.x + box.width / 2, y + height / 2, Math.max(7, Math.min(10, box.width - 5)));
+        }
+      }
+
+      if (height > 64 && box.width > 54) {
+        context.font = "600 9px 'Microsoft JhengHei', sans-serif";
+        context.globalAlpha = .78;
+        context.fillText(`${formatYear(item.start)} - ${formatYear(item.end)}`, box.x + box.width / 2, y + height - 10);
+      }
+      context.restore();
+    }
+
+    function drawVerticalText(context, text, x, y, size) {
+      const chars = [...text];
+      const step = size * .9;
+      context.font = `800 ${size}px 'Microsoft JhengHei', sans-serif`;
+      chars.forEach((char, index) => {
+        context.fillText(char, x, y - ((chars.length - 1) * step) / 2 + index * step);
+      });
+    }
+
+    function drawEvents(context, mini) {
+      events.forEach((item) => {
+        if (hiddenRegions.has(item.region)) return;
+        const box = laneBox(item);
+        if (!box) return;
+        const x = box.x + box.width / 2;
+        const y = yearToY(item.year);
+        const radius = mini ? 1.7 : 5.6;
+        context.fillStyle = "#fff4bd";
+        context.strokeStyle = "#3a3020";
+        context.lineWidth = mini ? .7 : 1.5;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+        if (!mini) {
+          hits.push({ type: "event", item, x: x - 9, y: y - 9, w: 18, h: 18, cx: x, cy: y });
+        }
+      });
+    }
+
+    function drawFocus(context, mini) {
+      if (!focused || mini) return;
+      const target = focused.type === "event" ? focused.item : focused;
+      context.save();
+      context.strokeStyle = "#111";
+      context.lineWidth = 3;
+      context.setLineDash([12, 8]);
+      if (focused.type === "event") {
+        const box = laneBox(target);
+        const x = box.x + box.width / 2;
+        const y = yearToY(target.year);
+        context.beginPath();
+        context.arc(x, y, 18, 0, Math.PI * 2);
+        context.stroke();
+      }
+      context.restore();
+    }
+
+    function drawFixedAxes() {
+      const axisY = viewport.height - 34;
+      axisHits = [];
+      ctx.save();
+      ctx.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
+      ctx.font = "700 12px 'Microsoft JhengHei', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      regionLayout.forEach((region) => {
+        const left = region.x * viewport.scale + viewport.tx;
+        const right = region.right * viewport.scale + viewport.tx;
+        if (right < 0 || left > viewport.width) return;
+        const x = Math.max(0, left);
+        const width = Math.min(viewport.width, right) - x;
+        if (width < 34) return;
+        ctx.fillStyle = hexToRgba(region.color, .82);
+        roundRect(ctx, x + 2, axisY, Math.max(8, width - 4), 24, 4);
+        ctx.fill();
+        ctx.fillStyle = readableText(region.color);
+        const buttonSize = 18;
+        const buttonX = x + width - buttonSize - 5;
+        const labelWidth = Math.max(20, width - buttonSize - 12);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x + 4, axisY + 2, labelWidth - 4, 20);
+        ctx.clip();
+        ctx.fillText(region.name, x + labelWidth / 2, axisY + 12);
+        ctx.restore();
+        ctx.fillStyle = "rgba(255, 250, 238, .88)";
+        roundRect(ctx, buttonX, axisY + 3, buttonSize, buttonSize, 4);
+        ctx.fill();
+        ctx.fillStyle = "#352c20";
+        ctx.font = "800 13px 'Microsoft JhengHei', sans-serif";
+        ctx.fillText("×", buttonX + buttonSize / 2, axisY + 12);
+        ctx.font = "700 12px 'Microsoft JhengHei', sans-serif";
+        axisHits.push({ regionId: region.id, x: buttonX, y: axisY + 3, w: buttonSize, h: buttonSize });
+      });
+
+      if (hiddenRegions.size > 0) {
+        let chipX = 14;
+        const chipY = axisY - 31;
+        ctx.textAlign = "left";
+        ctx.font = "700 11px 'Microsoft JhengHei', sans-serif";
+        ctx.fillStyle = "rgba(31, 26, 18, .88)";
+        ctx.fillText("已隱藏", chipX, chipY + 12);
+        chipX += 50;
+        regions.filter((region) => hiddenRegions.has(region.id)).forEach((region) => {
+          const text = `+ ${region.name}`;
+          const w = Math.min(112, Math.max(54, ctx.measureText(text).width + 16));
+          if (chipX + w > viewport.width - 12) return;
+          ctx.fillStyle = "rgba(255, 250, 238, .92)";
+          roundRect(ctx, chipX, chipY, w, 22, 5);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(45, 38, 26, .18)";
+          ctx.stroke();
+          ctx.fillStyle = "#3d3223";
+          ctx.fillText(text, chipX + 8, chipY + 12);
+          axisHits.push({ regionId: region.id, x: chipX, y: chipY, w, h: 22 });
+          chipX += w + 6;
+        });
+        ctx.textAlign = "center";
+      }
+
+      ctx.textAlign = "right";
+      const steps = tickSteps();
+      ctx.font = steps.label <= 25 ? "700 10px 'Microsoft JhengHei', sans-serif" : "700 12px 'Microsoft JhengHei', sans-serif";
+      for (let year = alignedStart(steps.label); year <= YEAR_MAX; year += steps.label) {
+        const y = yearToY(year) * viewport.scale + viewport.ty;
+        if (y < 0 || y > viewport.height) continue;
+        ctx.strokeStyle = "rgba(26, 22, 16, .28)";
+        ctx.beginPath();
+        ctx.moveTo(84, y);
+        ctx.lineTo(viewport.width, y);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255, 250, 238, .9)";
+        roundRect(ctx, 14, y - 11, 62, 22, 4);
+        ctx.fill();
+        ctx.fillStyle = "#463827";
+        ctx.fillText(year < 0 ? `前${Math.abs(year)}` : `${year}`, 69, y);
+      }
+
+      const centerYear = yToYear(screenToWorld(0, viewport.height / 2).y);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(31, 26, 18, .9)";
+      roundRect(ctx, 14, viewport.height - 86, 126, 28, 5);
+      ctx.fill();
+      ctx.fillStyle = "#fff7e8";
+      ctx.font = "700 12px 'Microsoft JhengHei', sans-serif";
+      ctx.fillText(`視窗中心：${formatYear(centerYear)}`, 24, viewport.height - 72);
+      ctx.restore();
+    }
+
+    function drawMinimap() {
+      const rect = minimap.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
+      const dpr = window.devicePixelRatio || 1;
+      if (minimap.width !== Math.floor(rect.width * dpr) || minimap.height !== Math.floor(rect.height * dpr)) {
+        minimap.width = Math.floor(rect.width * dpr);
+        minimap.height = Math.floor(rect.height * dpr);
+      }
+      mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      mctx.clearRect(0, 0, rect.width, rect.height);
+      const scale = Math.min(rect.width / WORLD.width, rect.height / WORLD.totalHeight);
+      const ox = (rect.width - WORLD.width * scale) / 2;
+      const oy = (rect.height - WORLD.totalHeight * scale) / 2;
+      mctx.save();
+      mctx.translate(ox, oy);
+      mctx.scale(scale, scale);
+      drawWorld(mctx, true);
+      mctx.restore();
+
+      const worldLeft = -viewport.tx / viewport.scale;
+      const worldTop = -viewport.ty / viewport.scale;
+      const worldW = viewport.width / viewport.scale;
+      const worldH = viewport.height / viewport.scale;
+      mctx.strokeStyle = "#111";
+      mctx.lineWidth = 2;
+      mctx.fillStyle = "rgba(255,255,255,.24)";
+      mctx.fillRect(ox + worldLeft * scale, oy + worldTop * scale, worldW * scale, worldH * scale);
+      mctx.strokeRect(ox + worldLeft * scale, oy + worldTop * scale, worldW * scale, worldH * scale);
+      minimap._map = { scale, ox, oy };
+    }
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      viewport.dpr = window.devicePixelRatio || 1;
+      viewport.width = rect.width;
+      viewport.height = rect.height;
+      canvas.width = Math.floor(rect.width * viewport.dpr);
+      canvas.height = Math.floor(rect.height * viewport.dpr);
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      if (!resize.didFit) {
+        initialView();
+        resize.didFit = true;
+      } else {
+        clampViewport();
+        draw();
+      }
+    }
+
+    function pointerPosition(event, target = canvas) {
+      const rect = target.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    }
+
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const axisHit = axisHitAt(pointerPosition(event));
+      if (axisHit) {
+        toggleRegion(axisHit.regionId);
+        return;
+      }
+      canvas.setPointerCapture(event.pointerId);
+      isDragging = true;
+      canvas.classList.add("dragging");
+      dragStart = { x: event.clientX, y: event.clientY, tx: viewport.tx, ty: viewport.ty };
+    });
+
+    canvas.addEventListener("pointermove", (event) => {
+      if (isDragging) {
+        viewport.tx = dragStart.tx + event.clientX - dragStart.x;
+        viewport.ty = dragStart.ty + event.clientY - dragStart.y;
+        clampViewport();
+        draw();
+        return;
+      }
+      const pos = pointerPosition(event);
+      const world = screenToWorld(pos.x, pos.y);
+      const hit = hitAt(world);
+      hovered = hit || null;
+      showTooltip(event, hit);
+    });
+
+    canvas.addEventListener("pointerup", (event) => {
+      if (isDragging) canvas.releasePointerCapture(event.pointerId);
+      isDragging = false;
+      canvas.classList.remove("dragging");
+    });
+
+    canvas.addEventListener("pointercancel", () => {
+      isDragging = false;
+      canvas.classList.remove("dragging");
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      hovered = null;
+      tooltip.style.display = "none";
+    });
+
+    app.addEventListener("wheel", (event) => {
+      if (event.target.closest(".search")) return;
+      event.preventDefault();
+      const factor = event.deltaY < 0 ? 1.12 : 0.89;
+      const pos = pointerPosition(event);
+      zoomAt(pos.x, pos.y, factor);
+    }, { passive: false });
+
+    canvas.addEventListener("contextmenu", (event) => {
+      const pos = pointerPosition(event);
+      const hit = hitAt(screenToWorld(pos.x, pos.y));
+      if (hit && hit.item && hit.item.wiki) {
+        event.preventDefault();
+        window.open(hit.item.wiki, "_blank", "noopener");
+      }
+    });
+
+    function hitAt(world) {
+      return [...hits].reverse().find((h) => world.x >= h.x && world.x <= h.x + h.w && world.y >= h.y && world.y <= h.y + h.h);
+    }
+
+    function axisHitAt(point) {
+      return [...axisHits].reverse().find((h) => point.x >= h.x && point.x <= h.x + h.w && point.y >= h.y && point.y <= h.y + h.h);
+    }
+
+    function toggleRegion(regionId) {
+      if (hiddenRegions.has(regionId)) {
+        hiddenRegions.delete(regionId);
+      } else {
+        if (regions.length - hiddenRegions.size <= 1) return;
+        hiddenRegions.add(regionId);
+      }
+      computeLayout();
+      hovered = null;
+      tooltip.style.display = "none";
+      clampViewport();
+      draw();
+    }
+
+    minimap.addEventListener("pointerdown", (event) => {
+      minimap.setPointerCapture(event.pointerId);
+      minimapDragging = true;
+      jumpFromMinimap(event);
+    });
+
+    minimap.addEventListener("pointermove", (event) => {
+      if (minimapDragging) jumpFromMinimap(event);
+    });
+
+    minimap.addEventListener("pointerup", (event) => {
+      minimap.releasePointerCapture(event.pointerId);
+      minimapDragging = false;
+    });
+
+    function jumpFromMinimap(event) {
+      const pos = pointerPosition(event, minimap);
+      const map = minimap._map;
+      if (!map) return;
+      const wx = (pos.x - map.ox) / map.scale;
+      const wy = (pos.y - map.oy) / map.scale;
+      viewport.tx = viewport.width / 2 - wx * viewport.scale;
+      viewport.ty = viewport.height / 2 - wy * viewport.scale;
+      clampViewport();
+      draw();
+    }
+
+    document.getElementById("zoomIn").addEventListener("click", () => zoomAt(viewport.width / 2, viewport.height / 2, 1.22));
+    document.getElementById("zoomOut").addEventListener("click", () => zoomAt(viewport.width / 2, viewport.height / 2, .82));
+    document.getElementById("fit").addEventListener("click", fitAll);
+    document.getElementById("fullscreen").addEventListener("click", toggleFullscreen);
+    document.getElementById("chinaPage").addEventListener("click", () => {
+      window.location.href = "china-history.html";
+    });
+    document.getElementById("legendMenu").addEventListener("click", (event) => {
+      event.stopPropagation();
+      document.getElementById("legendPopover").classList.toggle("visible");
+    });
+    bindCollapse("toolbarToggle", ".toolbar", "×", "☰");
+    bindCollapse("rightDockToggle", "#rightDock", "×", "i");
+
+    document.addEventListener("fullscreenchange", () => {
+      document.getElementById("fullscreen").textContent = document.fullscreenElement ? "⛶" : "⛶";
+      resize.didFit = false;
+      setTimeout(resize, 80);
+    });
+
+    function toggleFullscreen() {
+      const root = document.getElementById("app");
+      if (!document.fullscreenElement) {
+        root.requestFullscreen?.();
+      } else {
+        document.exitFullscreen?.();
+      }
+    }
+
+    function bindCollapse(buttonId, panelSelector, openText, closedText) {
+      const button = document.getElementById(buttonId);
+      const panel = document.querySelector(panelSelector);
+      button.addEventListener("click", () => {
+        panel.classList.toggle("collapsed");
+        const collapsed = panel.classList.contains("collapsed");
+        button.textContent = collapsed ? closedText : openText;
+        button.title = collapsed ? "展開" : "收合";
+        setTimeout(draw, 0);
+      });
+    }
+
+    searchInput.addEventListener("input", () => {
+      const q = searchInput.value.trim().toLowerCase();
+      suggestions.innerHTML = "";
+      if (!q) {
+        suggestions.classList.remove("visible");
+        return;
+      }
+      const index = [
+        ...polities.map((item) => ({ kind: "文明/政權", text: item.name, item })),
+        ...events.map((item) => ({ kind: "事件", text: item.name, item, type: "event" }))
+      ];
+      const matches = index.filter((entry) => entry.text.toLowerCase().includes(q)).slice(0, 12);
+      matches.forEach((entry) => {
+        const div = document.createElement("div");
+        div.className = "suggestion";
+        const region = regionById.get(entry.item.region);
+        const time = entry.kind === "事件"
+          ? formatYear(entry.item.year)
+          : `${formatYear(entry.item.start)} - ${formatYear(entry.item.end)}`;
+        div.innerHTML = `${entry.text}<small>${entry.kind} · ${region.name} · ${time}</small>`;
+        div.addEventListener("click", () => {
+          if (hiddenRegions.has(entry.item.region)) {
+            hiddenRegions.delete(entry.item.region);
+            computeLayout();
+          }
+          focused = entry.type === "event" ? { type: "event", item: entry.item } : entry.item;
+          const box = laneBox(entry.item);
+          if (!box) return;
+          const y = entry.type === "event" ? yearToY(entry.item.year) : (yearToY(entry.item.start) + yearToY(entry.item.end)) / 2;
+          focusWorld(box.x + box.width / 2, y, .8);
+          suggestions.classList.remove("visible");
+          searchInput.value = entry.text;
+        });
+        suggestions.appendChild(div);
+      });
+      suggestions.classList.toggle("visible", matches.length > 0);
+    });
+
+    window.addEventListener("click", (event) => {
+      if (!event.target.closest(".search")) suggestions.classList.remove("visible");
+      if (!event.target.closest("#legendPopover") && !event.target.closest("#legendMenu")) {
+        document.getElementById("legendPopover").classList.remove("visible");
+      }
+    });
+
+    function showTooltip(event, hit) {
+      if (!hit) {
+        tooltip.style.display = "none";
+        return;
+      }
+      const item = hit.item;
+      const region = regionById.get(item.region);
+      const isEvent = hit.type === "event";
+      tooltip.innerHTML = isEvent
+        ? `<strong>${item.name}</strong><span>${formatYear(item.year)} · ${region.name}<br>右鍵開啟維基百科</span>`
+        : `<strong>${item.name}</strong><span>${formatYear(item.start)} - ${formatYear(item.end)} · ${region.name}<br>右鍵開啟維基百科</span>`;
+      tooltip.style.display = "block";
+      const pad = 16;
+      const rect = tooltip.getBoundingClientRect();
+      let x = event.clientX + 14;
+      let y = event.clientY + 14;
+      if (x + rect.width + pad > window.innerWidth) x = event.clientX - rect.width - 14;
+      if (y + rect.height + pad > window.innerHeight) y = event.clientY - rect.height - 14;
+      tooltip.style.left = `${Math.max(pad, x)}px`;
+      tooltip.style.top = `${Math.max(pad, y)}px`;
+    }
+
+    function hexToRgba(hex, alpha) {
+      const value = hex.replace("#", "");
+      const r = parseInt(value.slice(0, 2), 16);
+      const g = parseInt(value.slice(2, 4), 16);
+      const b = parseInt(value.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function readableText(hex) {
+      const value = hex.replace("#", "");
+      const r = parseInt(value.slice(0, 2), 16);
+      const g = parseInt(value.slice(2, 4), 16);
+      const b = parseInt(value.slice(4, 6), 16);
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return luminance > .58 ? "#211b12" : "#fff7e8";
+    }
+
+    function roundRect(context, x, y, width, height, radius) {
+      const r = Math.min(radius, width / 2, height / 2);
+      context.beginPath();
+      context.moveTo(x + r, y);
+      context.lineTo(x + width - r, y);
+      context.quadraticCurveTo(x + width, y, x + width, y + r);
+      context.lineTo(x + width, y + height - r);
+      context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+      context.lineTo(x + r, y + height);
+      context.quadraticCurveTo(x, y + height, x, y + height - r);
+      context.lineTo(x, y + r);
+      context.quadraticCurveTo(x, y, x + r, y);
+      context.closePath();
+    }
+
+    function wrapCenterText(context, text, x, y, maxWidth, lineHeight) {
+      if (context.measureText(text).width <= maxWidth) {
+        context.fillText(text, x, y);
+        return;
+      }
+      const chars = [...text];
+      const lines = [];
+      let line = "";
+      chars.forEach((char) => {
+        const next = line + char;
+        if (context.measureText(next).width > maxWidth && line) {
+          lines.push(line);
+          line = char;
+        } else {
+          line = next;
+        }
+      });
+      if (line) lines.push(line);
+      const capped = lines.slice(0, 3);
+      const start = y - ((capped.length - 1) * lineHeight) / 2;
+      capped.forEach((part, index) => context.fillText(part, x, start + index * lineHeight));
+    }
+
+    computeLayout();
+    window.addEventListener("resize", resize);
+    resize();
+  </script>
+</body>
+</html>
