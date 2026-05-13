@@ -25,7 +25,16 @@ GEMINI_MODEL=gemini-2.5-flash-lite
 GEMINI_TIMEOUT_MS=90000
 PORT=3000
 HISTORY_ASSISTANT_ALLOWED_ORIGINS=https://shishiyen.github.io,http://localhost:3000
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+AI_WEEKLY_TOKEN_LIMIT=500000
+AI_WEEKLY_WARNING_RATIO=0.8
+AI_HARD_PAUSE_ENABLED=true
+ALERT_WEBHOOK_URL=
+ALERT_EMAIL_TO=
 ```
+
+本機沒有設定 Upstash Redis 時，後端會使用記憶體計數，方便開發測試；正式上線請務必設定 Upstash Redis，否則 Render 重啟後 token 用量會歸零。
 
 3. 啟動後端：
 
@@ -66,9 +75,24 @@ GEMINI_API_KEY=你的 Gemini API key
 GEMINI_MODEL=gemini-2.5-flash-lite
 GEMINI_TIMEOUT_MS=90000
 HISTORY_ASSISTANT_ALLOWED_ORIGINS=https://shishiyen.github.io,http://localhost:3000
+UPSTASH_REDIS_REST_URL=你的 Upstash Redis REST URL
+UPSTASH_REDIS_REST_TOKEN=你的 Upstash Redis REST token
+AI_WEEKLY_TOKEN_LIMIT=500000
+AI_WEEKLY_WARNING_RATIO=0.8
+AI_HARD_PAUSE_ENABLED=true
+ALERT_WEBHOOK_URL=你的 email webhook URL
+ALERT_EMAIL_TO=你的通知信箱
 ```
 
 不要在 Render 設定固定 `PORT`；Render 會自動提供。
+
+AI 小助手的防濫用限制在後端執行：
+
+- 每週 token 上限預設 `500000`，以台北時間週一切換新的週期。
+- 達到 `AI_WEEKLY_WARNING_RATIO` 預設 80% 時，會對 `ALERT_WEBHOOK_URL` 發送一次警告。
+- 達到週上限或發生全站短時間異常流量時，會自動暫停本週 AI 呼叫，後續請求不會再呼叫 Gemini。
+- 單一 IP 預設限制為每分鐘 10 次、每小時 40 次；全站每分鐘超過 30 次會視為異常流量。
+- 告警 webhook 會收到 JSON，包含 `to`、`subject`、`text` 與 `event` 欄位；實際寄信服務由 webhook 端負責。
 
 部署後確認：
 

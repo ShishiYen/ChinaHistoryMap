@@ -14,3 +14,17 @@ services:
         value: "90000"
       - key: HISTORY_ASSISTANT_ALLOWED_ORIGINS
         value: https://shishiyen.github.io,http://localhost:3000
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: AI_WEEKLY_TOKEN_LIMIT
+        value: "500000"
+      - key: AI_WEEKLY_WARNING_RATIO
+        value: "0.8"
+      - key: AI_HARD_PAUSE_ENABLED
+        value: "true"
+      - key: ALERT_WEBHOOK_URL
+        sync: false
+      - key: ALERT_EMAIL_TO
+        sync: false
