@@ -24,7 +24,7 @@ GEMINI_API_KEY=你的 Gemini API key
 GEMINI_MODEL=gemini-3-flash-preview
 GEMINI_TIMEOUT_MS=45000
 PORT=3000
-HISTORY_ASSISTANT_ALLOWED_ORIGINS=https://shishiyen.github.io,http://localhost:3000,http://localhost:5173
+HISTORY_ASSISTANT_ALLOWED_ORIGINS=https://shishiyen.github.io,http://localhost:3000
 ```
 
 3. 啟動後端：
@@ -46,17 +46,37 @@ http://localhost:3000/china-history.html
 GitHub Pages 只能放靜態檔案，不能執行 `server.js`，也不能保存 `.env` 裡的 `GEMINI_API_KEY`。因此：
 
 - `https://shishiyen.github.io/ChinaHistoryMap/china-history.html` 可以顯示時間地圖。
-- AI 小助手不會在 GitHub Pages 上直接運作。
-- 要讓線上版也能用 AI，需要把 `server.js` 部署到 Render、Railway、Vercel、Fly.io 或其他 Node 後端。
+- AI 小助手需要另外部署 Node 後端。
+- 目前前端已設定正式 AI endpoint：`https://global-history-ai.onrender.com/api/history-assistant`。
 - 如果後端和 GitHub Pages 不同網域，後端必須允許 CORS；本專案已用 `HISTORY_ASSISTANT_ALLOWED_ORIGINS` 控制允許來源。
 
-部署好後端後，把 `china-history.html` 內這行改成你的 API 網址：
+## Render 部署 AI 後端
 
-```js
-const hostedAssistantApiEndpoint = "https://你的後端網域/api/history-assistant";
+本專案包含 `render.yaml`，可在 Render 建立 Blueprint/Web Service：
+
+- Build command: `npm ci`
+- Start command: `npm start`
+- Service name: `global-history-ai`
+- Health check path: `/api/health`
+
+Render 環境變數：
+
+```env
+GEMINI_API_KEY=你的 Gemini API key
+GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_TIMEOUT_MS=45000
+HISTORY_ASSISTANT_ALLOWED_ORIGINS=https://shishiyen.github.io,http://localhost:3000
 ```
 
-然後重新 commit、push 到 GitHub Pages。
+不要在 Render 設定固定 `PORT`；Render 會自動提供。
+
+部署後確認：
+
+```text
+https://global-history-ai.onrender.com/api/health
+```
+
+如果你在 Render 使用不同 service name，請同步更新 `china-history.html` 裡的 `hostedAssistantApiEndpoint`。
 
 ## GitHub Pages 發布
 

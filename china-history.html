@@ -19,6 +19,10 @@
       <button id="fit" type="button" title="回到全圖">⌂</button>
       <button id="fullscreen" type="button" title="全螢幕">⛶</button>
       <select id="rangeSelect" class="range-control" title="切換時間範圍" aria-label="切換時間範圍"></select>
+      <label class="font-control" title="手機字體大小">
+        <span>字</span>
+        <input id="mobileFontScale" type="range" min="0.85" max="1.15" step="0.05" value="1" aria-label="手機字體大小">
+      </label>
       <button id="assistantToggle" type="button" title="AI 君主視角">AI</button>
       <div class="search">
         <input id="searchInput" type="search" placeholder="搜尋朝代、人物、事件、制度" autocomplete="off">
@@ -44,6 +48,7 @@
             <input id="assistantRange" type="range" min="1" max="5" step="1" value="3">
           </label>
         </div>
+        <div id="assistantRulerPreview" class="assistant-ruler-preview" aria-live="polite"></div>
         <label class="assistant-field">
           補充問題
           <textarea id="assistantPrompt" maxlength="700" placeholder="例如：用唐玄宗的角度描述安史之亂爆發前後的壓力。"></textarea>
@@ -799,6 +804,7 @@
     const minimapPanel = document.getElementById("minimapPanel");
     const minimapToggle = document.getElementById("minimapToggle");
     const rangeSelect = document.getElementById("rangeSelect");
+    const mobileFontScale = document.getElementById("mobileFontScale");
     const mobilePrevTrack = document.getElementById("mobilePrevTrack");
     const mobileNextTrack = document.getElementById("mobileNextTrack");
     const mobileTrackLabel = document.getElementById("mobileTrackLabel");
@@ -814,10 +820,11 @@
     const assistantStatus = document.getElementById("assistantStatus");
     const assistantAnswer = document.getElementById("assistantAnswer");
     const assistantCitations = document.getElementById("assistantCitations");
+    const assistantRulerPreview = document.getElementById("assistantRulerPreview");
     const assistantHistorySearch = document.getElementById("assistantHistorySearch");
     const assistantHistoryList = document.getElementById("assistantHistoryList");
     const assistantStorageKey = "globalHistory.assistant.conversations.v1";
-    const hostedAssistantApiEndpoint = "";
+    const hostedAssistantApiEndpoint = "https://global-history-ai.onrender.com/api/history-assistant";
     const assistantApiEndpoint =
       window.CHINA_HISTORY_ASSISTANT_API ||
       hostedAssistantApiEndpoint ||
@@ -833,8 +840,13 @@
     let miniDragging = false;
     let dragMoved = false;
     let dragStart = { x: 0, y: 0, tx: 0, ty: 0 };
+    const activePointers = new Map();
+    let pinchStart = null;
     let mobileTrackIndex = 0;
     const viewport = { dpr: 1, width: 0, height: 0, tx: 0, ty: 0, scale: .28, minScale: .12, maxScale: 3.6 };
+    const mobileFontStorageKey = "globalHistory.mobileFontScale.v1";
+    let mobileTextScale = Math.max(.85, Math.min(1.15, Number(localStorage.getItem(mobileFontStorageKey)) || 1));
+    mobileFontScale.value = String(mobileTextScale);
 
     function computeLayout() {
       setResponsiveMetrics();
@@ -852,11 +864,11 @@
 
     function setResponsiveMetrics() {
       const mobile = viewport.width > 0 && viewport.width < 760;
-      WORLD.left = mobile ? 158 : 400;
-      RULER_AXIS.x = mobile ? 38 : 82;
-      RULER_AXIS.width = mobile ? 32 : 94;
-      CORE_AXIS.x = mobile ? 76 : 190;
-      CORE_AXIS.width = mobile ? 74 : 168;
+      WORLD.left = mobile ? 118 : 400;
+      RULER_AXIS.x = mobile ? 16 : 82;
+      RULER_AXIS.width = mobile ? 26 : 94;
+      CORE_AXIS.x = mobile ? 48 : 190;
+      CORE_AXIS.width = mobile ? 58 : 168;
     }
 
     function applyTimeRange(rangeId, keepCenter = false) {
@@ -980,6 +992,10 @@
     }
     function alignedStart(step) { return Math.ceil(YEAR_MIN / step) * step; }
     function screenToWorld(x, y) { return { x: (x - viewport.tx) / viewport.scale, y: (y - viewport.ty) / viewport.scale }; }
+    function mobileFontSize(base, min = base * .85, max = base * 1.15) {
+      const size = viewport.width < 760 ? base * mobileTextScale : base;
+      return Math.round(Math.max(min, Math.min(max, size)));
+    }
 
     function laneBox(item) {
       const track = trackInfo(item.track);
@@ -1223,7 +1239,9 @@
       if (!shouldShowEventText(item)) return;
       const label = item.name.length > 12 ? `${item.name.slice(0, 11)}…` : item.name;
       context.save();
-      context.font = density > 7 ? "600 11px 'Microsoft JhengHei', sans-serif" : "600 9px 'Microsoft JhengHei', sans-serif";
+      context.font = density > 7
+        ? `600 ${mobileFontSize(11, 9, 12)}px 'Microsoft JhengHei', sans-serif`
+        : `600 ${mobileFontSize(9, 8, 10)}px 'Microsoft JhengHei', sans-serif`;
       context.fillStyle = "rgba(61, 54, 43, .72)";
       context.textAlign = "left";
       context.textBaseline = "middle";
@@ -1249,7 +1267,9 @@
       context.arc(x, y, 6.5, 0, Math.PI * 2);
       context.fill();
       context.stroke();
-      context.font = density > 7 ? "700 11px 'Microsoft JhengHei', sans-serif" : "700 9px 'Microsoft JhengHei', sans-serif";
+      context.font = density > 7
+        ? `700 ${mobileFontSize(11, 9, 12)}px 'Microsoft JhengHei', sans-serif`
+        : `700 ${mobileFontSize(9, 8, 10)}px 'Microsoft JhengHei', sans-serif`;
       context.fillStyle = "rgba(46, 41, 34, .82)";
       context.textAlign = "left";
       context.textBaseline = "middle";
@@ -1283,7 +1303,7 @@
       ctx.fillStyle = "#2d2418";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = mobile ? "800 10px 'Microsoft JhengHei', sans-serif" : "800 13px 'Microsoft JhengHei', sans-serif";
+      ctx.font = mobile ? `800 ${mobileFontSize(9, 8, 10)}px 'Microsoft JhengHei', sans-serif` : "800 13px 'Microsoft JhengHei', sans-serif";
       ctx.fillText(mobile ? "首腦" : "代表首腦", x + width / 2, mobile ? 116 : 92);
 
       const visible = rulers
@@ -1323,12 +1343,12 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         const label = item.uncertain ? `${item.name}?` : item.name;
-        const size = Math.max(mobile ? 7 : 8, Math.min(mobile ? 10 : 13, Math.min(width / Math.max(2, label.length * .8), hh / 2.2)));
+        const size = Math.max(mobile ? mobileFontSize(7, 7, 8) : 8, Math.min(mobile ? mobileFontSize(9, 8, 10) : 13, Math.min(width / Math.max(2, label.length * .8), hh / 2.2)));
         ctx.font = `800 ${size}px 'Microsoft JhengHei', sans-serif`;
         if (ctx.measureText(label).width <= width - 8 && hh >= size + 8) {
           ctx.fillText(label, x + width / 2, yy + hh / 2);
         } else {
-          drawVerticalText(ctx, label.slice(0, mobile ? 3 : 4), x + width / 2, yy + hh / 2, Math.min(mobile ? 9 : 12, Math.max(7, width - 8)));
+          drawVerticalText(ctx, label.slice(0, mobile ? 3 : 4), x + width / 2, yy + hh / 2, Math.min(mobile ? mobileFontSize(8, 7, 9) : 12, Math.max(7, width - 8)));
         }
         if (!mobile && hh > 42) {
           ctx.globalAlpha = .82;
@@ -1414,7 +1434,7 @@
       ctx.fillStyle = "#2d2418";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = mobile ? "800 10px 'Microsoft JhengHei', sans-serif" : "800 13px 'Microsoft JhengHei', sans-serif";
+      ctx.font = mobile ? `800 ${mobileFontSize(9, 8, 10)}px 'Microsoft JhengHei', sans-serif` : "800 13px 'Microsoft JhengHei', sans-serif";
       ctx.fillText(mobile ? "主軸" : "中原主軸", x + width / 2, mobile ? 116 : 92);
 
       coreAxis.forEach(item => {
@@ -1432,7 +1452,7 @@
         ctx.strokeStyle = "rgba(35,27,18,.45)";
         ctx.stroke();
         ctx.fillStyle = readableText(item.color);
-        ctx.font = `800 ${Math.max(mobile ? 8 : 10, Math.min(mobile ? 12 : 18, hh / 3.2))}px 'Microsoft JhengHei', sans-serif`;
+        ctx.font = `800 ${Math.max(mobile ? mobileFontSize(8, 7, 9) : 10, Math.min(mobile ? mobileFontSize(11, 9, 12) : 18, hh / 3.2))}px 'Microsoft JhengHei', sans-serif`;
         if (hh > 20) {
           ctx.fillText(item.name, x + width / 2, yy + hh / 2);
         }
@@ -1631,7 +1651,7 @@
       const mobile = viewport.width < 760;
       for (const segment of TIME_SEGMENTS) {
         const steps = stepsForYear(segment.start + 1);
-        ctx.font = mobile ? "700 10px 'Microsoft JhengHei', sans-serif" : (steps.label <= 25 ? "700 10px 'Microsoft JhengHei', sans-serif" : "700 12px 'Microsoft JhengHei', sans-serif");
+        ctx.font = mobile ? `700 ${mobileFontSize(9, 8, 10)}px 'Microsoft JhengHei', sans-serif` : (steps.label <= 25 ? "700 10px 'Microsoft JhengHei', sans-serif" : "700 12px 'Microsoft JhengHei', sans-serif");
         for (let year = alignedStart(steps.label); year <= segment.end; year += steps.label) {
           if (year < segment.start || year > YEAR_MAX) continue;
           const labelKey = Math.round(year);
@@ -1641,11 +1661,11 @@
           if (y < 0 || y > viewport.height) continue;
           ctx.strokeStyle = "rgba(26, 22, 16, .28)";
           ctx.beginPath();
-          ctx.moveTo(mobile ? 34 : 84, y);
+          ctx.moveTo(mobile ? 27 : 84, y);
           ctx.lineTo(viewport.width, y);
           ctx.stroke();
           ctx.fillStyle = "rgba(255,250,238,.9)";
-          roundRect(ctx, mobile ? 3 : 14, y - (mobile ? 9 : 11), mobile ? 30 : 62, mobile ? 18 : 22, 4);
+          roundRect(ctx, mobile ? 2 : 14, y - (mobile ? 8 : 11), mobile ? 28 : 62, mobile ? 16 : 22, 4);
           ctx.fill();
           ctx.fillStyle = "#463827";
           ctx.fillText(mobile ? compactYear(year) : (year < 0 ? `前${Math.abs(year)}` : `${year}`), mobile ? 29 : 69, y);
@@ -1694,7 +1714,7 @@
     }
 
     function clampViewport() {
-      const leftPad = viewport.width < 760 ? 44 : 80;
+      const leftPad = viewport.width < 760 ? 30 : 80;
       const rightPad = Math.max(80, rightOverlayWidth() + 42);
       viewport.tx = Math.min(leftPad, Math.max(viewport.width - WORLD.width * viewport.scale - rightPad, viewport.tx));
       viewport.ty = Math.min(80, Math.max(viewport.height - WORLD.totalHeight * viewport.scale - 80, viewport.ty));
@@ -1882,14 +1902,67 @@
       return window.matchMedia?.("(pointer: coarse)")?.matches || viewport.width < 760;
     }
 
+    function rememberPointer(event) {
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+
+    function forgetPointer(event) {
+      activePointers.delete(event.pointerId);
+      if (activePointers.size < 2) pinchStart = null;
+    }
+
+    function pointerPair() {
+      const points = [...activePointers.values()];
+      if (points.length < 2) return null;
+      const [a, b] = points;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      return {
+        distance: Math.max(1, Math.hypot(dx, dy)),
+        center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+      };
+    }
+
+    function beginPinch() {
+      const pair = pointerPair();
+      if (!pair) return;
+      pinchStart = {
+        distance: pair.distance,
+        scale: viewport.scale,
+        world: screenToWorld(pair.center.x, pair.center.y)
+      };
+      isDragging = false;
+      dragMoved = true;
+      canvas.classList.remove("dragging");
+    }
+
+    function updatePinch() {
+      const pair = pointerPair();
+      if (!pair || !pinchStart) return false;
+      viewport.scale = Math.min(viewport.maxScale, Math.max(viewport.minScale, pinchStart.scale * (pair.distance / pinchStart.distance)));
+      viewport.tx = pair.center.x - pinchStart.world.x * viewport.scale;
+      viewport.ty = pair.center.y - pinchStart.world.y * viewport.scale;
+      clampViewport();
+      draw();
+      return true;
+    }
+
     canvas.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;
-      const axisHit = axisHitAt(pointerPosition(event));
-      if (axisHit) {
-        toggleTrack(axisHit.trackId);
-        return;
+      rememberPointer(event);
+      if (activePointers.size < 2) {
+        const axisHit = axisHitAt(pointerPosition(event));
+        if (axisHit) {
+          toggleTrack(axisHit.trackId);
+          forgetPointer(event);
+          return;
+        }
       }
       canvas.setPointerCapture(event.pointerId);
+      if (activePointers.size >= 2) {
+        beginPinch();
+        return;
+      }
       isDragging = true;
       dragMoved = false;
       canvas.classList.add("dragging");
@@ -1897,6 +1970,8 @@
     });
 
     canvas.addEventListener("pointermove", event => {
+      if (activePointers.has(event.pointerId)) activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (activePointers.size >= 2 && updatePinch()) return;
       if (isDragging) {
         if (Math.abs(event.clientX - dragStart.x) + Math.abs(event.clientY - dragStart.y) > 6) dragMoved = true;
         viewport.tx = dragStart.tx + event.clientX - dragStart.x;
@@ -1912,7 +1987,8 @@
     });
 
     canvas.addEventListener("pointerup", event => {
-      if (isDragging) canvas.releasePointerCapture(event.pointerId);
+      if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      forgetPointer(event);
       if (isDragging && !dragMoved && isTouchLike()) {
         const pos = pointerPosition(event);
         const hit = fixedHitAt(pos) || hitAt(screenToWorld(pos.x, pos.y));
@@ -1924,7 +2000,8 @@
       canvas.classList.remove("dragging");
     });
 
-    canvas.addEventListener("pointercancel", () => {
+    canvas.addEventListener("pointercancel", event => {
+      forgetPointer(event);
       isDragging = false;
       canvas.classList.remove("dragging");
     });
@@ -2058,13 +2135,42 @@
         .sort((a, b) => Math.abs(((a.start + a.end) / 2) - year) - Math.abs(((b.start + b.end) / 2) - year))[0] || null;
     }
 
+    function assistantFindCore(year) {
+      return coreAxis
+        .filter(item => item.start <= year && item.end >= year)
+        .sort((a, b) => (a.end - a.start) - (b.end - b.start))[0] || null;
+    }
+
+    function assistantUpdateRulerPreview() {
+      const year = Math.round(Number(assistantYear.value));
+      if (!Number.isFinite(year) || year < ABS_YEAR_MIN || year > ABS_YEAR_MAX) {
+        assistantRulerPreview.textContent = "輸入西元前 2100 到西元 2026 之間的年份，離開欄位後會顯示當年代表君主/首腦。";
+        assistantRulerPreview.classList.add("empty");
+        return;
+      }
+
+      const ruler = assistantFindRuler(year, year, year);
+      const core = assistantFindCore(year);
+      const yearText = assistantYearLabel(year);
+      if (!ruler) {
+        assistantRulerPreview.textContent = `${yearText}：目前資料沒有可對應的代表君主/首腦。`;
+        assistantRulerPreview.classList.add("empty");
+        return;
+      }
+
+      const title = ruler.title ? `（${ruler.title}）` : "";
+      const polity = ruler.polity ? `｜${ruler.polity}` : "";
+      const coreText = core ? `｜中原主軸：${core.name}` : "";
+      const note = ruler.note ? `｜${ruler.note}` : "";
+      assistantRulerPreview.textContent = `${yearText}：${ruler.name}${title}${polity}${coreText}${note}`;
+      assistantRulerPreview.classList.remove("empty");
+    }
+
     function assistantBuildContext(year, rangeYears) {
       const min = year - rangeYears;
       const max = year + rangeYears;
       const ruler = assistantFindRuler(year, min, max);
-      const core = coreAxis
-        .filter(item => item.start <= year && item.end >= year)
-        .sort((a, b) => (a.end - a.start) - (b.end - b.start))[0] || null;
+      const core = assistantFindCore(year);
 
       return {
         year,
@@ -2156,6 +2262,7 @@
           assistantRange.value = record.rangeYears;
           assistantRangeValue.textContent = record.rangeYears;
           assistantPrompt.value = record.prompt || "";
+          assistantUpdateRulerPreview();
           assistantSetOutput(record.answer, record.citations);
           assistantSetStatus(`已載入 ${record.yearLabel} 的紀錄。`);
         });
@@ -2229,11 +2336,17 @@
     });
     rangeSelect.value = activeRange.id;
     rangeSelect.addEventListener("change", () => applyTimeRange(rangeSelect.value));
+    mobileFontScale.addEventListener("input", () => {
+      mobileTextScale = Math.max(.85, Math.min(1.15, Number(mobileFontScale.value) || 1));
+      localStorage.setItem(mobileFontStorageKey, String(mobileTextScale));
+      draw();
+    });
     assistantToggle.addEventListener("click", () => {
       assistantDrawer.hidden = !assistantDrawer.hidden;
       if (!assistantDrawer.hidden) {
         assistantYear.focus();
         assistantRenderHistory();
+        assistantUpdateRulerPreview();
       }
     });
     assistantClose.addEventListener("click", () => {
@@ -2242,6 +2355,8 @@
     assistantRange.addEventListener("input", () => {
       assistantRangeValue.textContent = assistantRange.value;
     });
+    assistantYear.addEventListener("blur", assistantUpdateRulerPreview);
+    assistantYear.addEventListener("change", assistantUpdateRulerPreview);
     assistantSubmit.addEventListener("click", assistantGenerate);
     assistantPrompt.addEventListener("keydown", event => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") assistantGenerate();
@@ -2340,6 +2455,7 @@
 
     validateData();
     assistantRenderHistory();
+    assistantUpdateRulerPreview();
     computeLayout();
     window.addEventListener("resize", resize);
     resize();

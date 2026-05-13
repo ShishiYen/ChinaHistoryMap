@@ -121,6 +121,25 @@ button:hover { background: #fff0cc; }
   outline: none;
 }
 
+.font-control {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  min-width: 94px;
+  padding: 0 8px;
+  border: 1px solid rgba(54, 42, 28, .18);
+  border-radius: 7px;
+  background: #fffaf0;
+  color: #2d2418;
+  font: 800 12px "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+
+.font-control input {
+  width: 54px;
+  accent-color: #9b5c2e;
+}
+
 .suggestions {
   position: absolute;
   top: 40px;
@@ -413,6 +432,23 @@ button:hover { background: #fff0cc; }
   padding: 7px 10px;
 }
 
+.assistant-ruler-preview {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid rgba(93, 68, 40, .16);
+  border-radius: 7px;
+  background: rgba(255, 244, 219, .78);
+  color: #3f2d1b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.assistant-ruler-preview.empty {
+  color: #806f58;
+  font-weight: 700;
+}
+
 .assistant-actions {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -618,6 +654,16 @@ button:hover { background: #fff0cc; }
     height: 31px;
     padding: 0 8px;
   }
+
+  .font-control {
+    display: inline-flex;
+    flex: 0 0 86px;
+    min-width: 86px;
+    height: 31px;
+    padding: 0 7px;
+  }
+
+  .font-control input { width: 46px; }
 
   .note { display: none; }
   .event-panel { max-width: calc(100vw - 16px); }

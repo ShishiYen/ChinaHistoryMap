@@ -31,6 +31,14 @@ app.use((req, res, next) => {
 });
 app.use(express.static(process.cwd(), { extensions: ["html"] }));
 
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "global-history-ai",
+    model: currentModel()
+  });
+});
+
 function clampRange(value) {
   const range = Number(value);
   if (!Number.isFinite(range)) return 3;

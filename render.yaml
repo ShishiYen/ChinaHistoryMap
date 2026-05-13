@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: global-history-ai
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3-flash-preview
+      - key: GEMINI_TIMEOUT_MS
+        value: "45000"
+      - key: HISTORY_ASSISTANT_ALLOWED_ORIGINS
+        value: https://shishiyen.github.io,http://localhost:3000
