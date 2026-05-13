@@ -9,8 +9,8 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-3-flash-preview
+        value: gemini-2.5-flash-lite
       - key: GEMINI_TIMEOUT_MS
-        value: "45000"
+        value: "90000"
       - key: HISTORY_ASSISTANT_ALLOWED_ORIGINS
         value: https://shishiyen.github.io,http://localhost:3000

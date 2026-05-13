@@ -343,15 +343,16 @@ button:hover { background: #fff0cc; }
 
 .assistant-drawer {
   position: absolute;
-  top: 14px;
+  top: max(14px, env(safe-area-inset-top));
   right: 14px;
-  bottom: 14px;
   z-index: 18;
   width: min(420px, calc(100vw - 28px));
+  max-height: min(760px, calc(100dvh - 28px));
   display: grid;
-  grid-template-rows: auto auto minmax(320px, 1fr) minmax(92px, .32fr);
+  grid-template-rows: auto minmax(0, auto) minmax(390px, 1fr) minmax(54px, .16fr);
   gap: 8px;
   min-height: 0;
+  overflow: hidden;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -387,7 +388,8 @@ button:hover { background: #fff0cc; }
 
 .assistant-form {
   display: grid;
-  gap: 7px;
+  gap: 6px;
+  min-height: 0;
 }
 
 .assistant-grid {
@@ -426,14 +428,14 @@ button:hover { background: #fff0cc; }
 }
 
 .assistant-field textarea {
-  min-height: 48px;
-  max-height: 72px;
+  min-height: 42px;
+  max-height: 58px;
   resize: vertical;
   padding: 7px 10px;
 }
 
 .assistant-ruler-preview {
-  min-height: 34px;
+  min-height: 30px;
   padding: 7px 9px;
   border: 1px solid rgba(93, 68, 40, .16);
   border-radius: 7px;
@@ -529,6 +531,7 @@ button:hover { background: #fff0cc; }
   grid-template-rows: auto 1fr;
   gap: 6px;
   min-height: 0;
+  overflow: hidden;
   border-top: 1px solid rgba(54,42,28,.12);
   padding-top: 7px;
 }
@@ -694,12 +697,12 @@ button:hover { background: #fff0cc; }
   .tooltip { pointer-events: auto; }
 
   .assistant-drawer {
-    top: 8px;
+    top: max(8px, env(safe-area-inset-top));
     right: 6px;
-    bottom: 58px;
     left: 6px;
     width: auto;
-    grid-template-rows: auto auto minmax(260px, 1fr) minmax(76px, .24fr);
+    max-height: calc(100dvh - 66px);
+    grid-template-rows: auto minmax(0, auto) minmax(300px, 1fr) minmax(46px, .14fr);
   }
 
   .assistant-grid {

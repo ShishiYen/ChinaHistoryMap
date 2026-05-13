@@ -57,16 +57,16 @@ function truncateText(value, maxLength) {
 }
 
 function timeoutMessage() {
-  return "Gemini 回應逾時。請稍後重試，或把 GEMINI_MODEL 改成 gemini-3-flash-preview / gemini-2.5-flash 測試。";
+  return "Gemini 回應逾時。請稍後重試，或把 GEMINI_TIMEOUT_MS 調高。";
 }
 
 function currentModel() {
-  return process.env.GEMINI_MODEL || "gemini-3-pro-preview";
+  return process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
 }
 
 function currentTimeoutMs() {
-  const timeout = Number(process.env.GEMINI_TIMEOUT_MS || 45000);
-  return Number.isFinite(timeout) ? Math.max(10000, Math.min(timeout, 120000)) : 45000;
+  const timeout = Number(process.env.GEMINI_TIMEOUT_MS || 90000);
+  return Number.isFinite(timeout) ? Math.max(10000, Math.min(timeout, 180000)) : 90000;
 }
 
 function compactEntries(entries, limit = 60) {
@@ -161,7 +161,7 @@ app.post("/api/history-assistant", async (req, res) => {
     const context = req.body?.context && typeof req.body.context === "object" ? req.body.context : {};
     const model = currentModel();
     const requestTimeoutMs = currentTimeoutMs();
-    const ai = new GoogleGenAI({ apiKey, timeout: Math.min(requestTimeoutMs, 30000) });
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: requestTimeoutMs } });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     let response;

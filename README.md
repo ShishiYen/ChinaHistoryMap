@@ -21,8 +21,8 @@ npm install
 
 ```env
 GEMINI_API_KEY=你的 Gemini API key
-GEMINI_MODEL=gemini-3-flash-preview
-GEMINI_TIMEOUT_MS=45000
+GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_TIMEOUT_MS=90000
 PORT=3000
 HISTORY_ASSISTANT_ALLOWED_ORIGINS=https://shishiyen.github.io,http://localhost:3000
 ```
@@ -63,8 +63,8 @@ Render 環境變數：
 
 ```env
 GEMINI_API_KEY=你的 Gemini API key
-GEMINI_MODEL=gemini-3-flash-preview
-GEMINI_TIMEOUT_MS=45000
+GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_TIMEOUT_MS=90000
 HISTORY_ASSISTANT_ALLOWED_ORIGINS=https://shishiyen.github.io,http://localhost:3000
 ```
 
