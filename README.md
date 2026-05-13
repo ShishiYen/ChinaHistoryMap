@@ -1,28 +1,77 @@
 # GlobalHistory
 
-互動式歷史時間地圖專案，使用單一 HTML 檔內嵌 CSS 與 JavaScript 實作，不需要額外建置工具即可在瀏覽器中開啟。
+單檔式世界史與中國史時間地圖。主頁可由 GitHub Pages 靜態部署；AI 小助手需要另外啟動或部署 Node 後端。
 
-## 目前檔案
+## 網頁
 
-- `index.html`：全世界歷史時間地圖。以 Canvas 呈現西元前 3500 年到 2026 年的跨區域歷史政權、文明、事件與影響關係。包含拖曳、滾輪縮放、搜尋、區域顯示/隱藏、小地圖、提示框與右鍵開啟維基百科連結。
-- `china-history.html`：中國史時間地圖。以 Canvas 呈現西元前 2100 年到 2026 年的中國歷史主軸、朝代政權、君主/首腦、制度文化事件與近現代事件。包含時間範圍切換、事件列表、小地圖、搜尋、手機軌道切換、資料驗證與維基百科連結。
+- `index.html`: 世界史時間地圖。
+- `china-history.html`: 中國史時間地圖，包含君主/首腦欄、大事件、手機版介面與 AI 小助手。
+- `china-history.css`: 中國史頁樣式。
+- `server.js`: AI 小助手後端，負責安全地呼叫 Gemini API。
 
-## 使用方式
+## 本機執行 AI 小助手
 
-直接用瀏覽器開啟以下任一檔案：
+1. 安裝依賴：
 
-- `index.html`
-- `china-history.html`
+```bash
+npm install
+```
 
-## 技術概要
+2. 建立 `.env`，內容可參考 `.env.example`：
 
-- 前端：HTML、CSS、原生 JavaScript
-- 視覺化：Canvas 2D
-- 資料形式：JavaScript 陣列內嵌於各 HTML 檔案
-- 外部連結：Wikipedia / Wikidata 名稱連結
+```env
+GEMINI_API_KEY=你的 Gemini API key
+GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_TIMEOUT_MS=45000
+PORT=3000
+HISTORY_ASSISTANT_ALLOWED_ORIGINS=https://shishiyen.github.io,http://localhost:3000,http://localhost:5173
+```
 
-## Git 狀態
+3. 啟動後端：
 
-此資料夾已是 Git repository，主要分支為 `main`，並已設定遠端 `origin`：
+```bash
+npm start
+```
 
-`https://github.com/ShishiYen/ChinaHistoryMap.git`
+4. 開啟：
+
+```text
+http://localhost:3000/china-history.html
+```
+
+不要用 `python -m http.server` 或只開 GitHub Pages 測 AI，因為那些只會提供靜態 HTML，沒有 `/api/history-assistant` 後端。
+
+## GitHub Pages 與 AI 限制
+
+GitHub Pages 只能放靜態檔案，不能執行 `server.js`，也不能保存 `.env` 裡的 `GEMINI_API_KEY`。因此：
+
+- `https://shishiyen.github.io/ChinaHistoryMap/china-history.html` 可以顯示時間地圖。
+- AI 小助手不會在 GitHub Pages 上直接運作。
+- 要讓線上版也能用 AI，需要把 `server.js` 部署到 Render、Railway、Vercel、Fly.io 或其他 Node 後端。
+- 如果後端和 GitHub Pages 不同網域，後端必須允許 CORS；本專案已用 `HISTORY_ASSISTANT_ALLOWED_ORIGINS` 控制允許來源。
+
+部署好後端後，把 `china-history.html` 內這行改成你的 API 網址：
+
+```js
+const hostedAssistantApiEndpoint = "https://你的後端網域/api/history-assistant";
+```
+
+然後重新 commit、push 到 GitHub Pages。
+
+## GitHub Pages 發布
+
+目前 repository remote：
+
+```text
+https://github.com/ShishiYen/ChinaHistoryMap.git
+```
+
+一般更新流程：
+
+```bash
+git add index.html china-history.html china-history.css server.js README.md package.json package-lock.json .env.example
+git commit -m "Update history map"
+git push origin main
+```
+
+GitHub Pages 會在 push 後重新部署。

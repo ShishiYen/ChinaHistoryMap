@@ -817,6 +817,11 @@
     const assistantHistorySearch = document.getElementById("assistantHistorySearch");
     const assistantHistoryList = document.getElementById("assistantHistoryList");
     const assistantStorageKey = "globalHistory.assistant.conversations.v1";
+    const hostedAssistantApiEndpoint = "";
+    const assistantApiEndpoint =
+      window.CHINA_HISTORY_ASSISTANT_API ||
+      hostedAssistantApiEndpoint ||
+      "/api/history-assistant";
 
     let layout = [];
     let hits = [];
@@ -2110,6 +2115,21 @@
       assistantRenderCitations(citations);
     }
 
+    function assistantIsStaticPagesWithoutBackend() {
+      return !window.CHINA_HISTORY_ASSISTANT_API &&
+        !hostedAssistantApiEndpoint &&
+        location.hostname.endsWith("github.io");
+    }
+
+    function assistantStaticPagesMessage() {
+      return [
+        "目前這個 GitHub Pages 網頁是靜態網站，所以不會執行 server.js，也沒有 /api/history-assistant 後端可以呼叫。",
+        "",
+        "本機測試請執行 npm start，然後打開 http://localhost:3000/china-history.html。",
+        "正式上線請把 server.js 部署到 Render、Railway、Vercel 或其他 Node 後端，設定 GEMINI_API_KEY，再把 china-history.html 裡的 hostedAssistantApiEndpoint 改成你的後端 API 網址。"
+      ].join("\n");
+    }
+
     function assistantRenderHistory() {
       const q = assistantHistorySearch.value.trim().toLowerCase();
       const records = assistantLoadHistory()
@@ -2156,10 +2176,13 @@
       assistantSetOutput("生成中...");
 
       try {
+        if (assistantIsStaticPagesWithoutBackend()) {
+          throw new Error(assistantStaticPagesMessage());
+        }
         const context = assistantBuildContext(year, rangeYears);
         ensureRangeForItem({ start: year, end: year });
         focusWorld(WORLD.left, yearToY(year), viewport.width < 760 ? Math.max(viewport.scale, .82) : Math.max(viewport.scale, .72));
-        const response = await fetch("/api/history-assistant", {
+        const response = await fetch(assistantApiEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2169,7 +2192,9 @@
             context
           })
         });
-        const payload = await response.json().catch(() => ({}));
+        const payload = await response.json().catch(() => ({
+          error: `AI 後端沒有回傳 JSON。請確認 API 網址是否正確：${assistantApiEndpoint}`
+        }));
         if (!response.ok) throw new Error(payload.error || "AI 小助手暫時無法回應。");
 
         assistantSetOutput(payload.answer, payload.citations || []);
