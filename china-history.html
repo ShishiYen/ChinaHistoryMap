@@ -9,6 +9,12 @@
 <body>
   <div id="app">
     <canvas id="timeline" aria-label="中國史時間地圖"></canvas>
+    <nav class="pan-pad" aria-label="畫面平移控制">
+      <button class="pan-button pan-up" type="button" data-pan-x="0" data-pan-y="-1" aria-label="向上平移">&#9650;</button>
+      <button class="pan-button pan-left" type="button" data-pan-x="-1" data-pan-y="0" aria-label="向左平移">&#9664;</button>
+      <button class="pan-button pan-right" type="button" data-pan-x="1" data-pan-y="0" aria-label="向右平移">&#9654;</button>
+      <button class="pan-button pan-down" type="button" data-pan-x="0" data-pan-y="1" aria-label="向下平移">&#9660;</button>
+    </nav>
     <div class="toolbar">
       <div class="title">
         <strong>中國史時間地圖</strong>
@@ -908,6 +914,7 @@
     const mobileFontScale = document.getElementById("mobileFontScale");
     const mobilePrevTrack = document.getElementById("mobilePrevTrack");
     const mobileNextTrack = document.getElementById("mobileNextTrack");
+    const panButtons = [...document.querySelectorAll(".pan-button")];
     const mobileTrackLabel = document.getElementById("mobileTrackLabel");
     const assistantToggle = document.getElementById("assistantToggle");
     const assistantDrawer = document.getElementById("assistantDrawer");
@@ -939,6 +946,10 @@
     const hiddenTracks = new Set();
     let isDragging = false;
     let miniDragging = false;
+    const activePanPointers = new Map();
+    const activePanKeys = new Set();
+    let panAnimationFrame = 0;
+    let panAnimationTime = 0;
     let dragMoved = false;
     let dragStart = { x: 0, y: 0, tx: 0, ty: 0 };
     const activePointers = new Map();
@@ -1776,13 +1787,18 @@
       }
 
       const centerYear = yToYear(screenToWorld(0, viewport.height / 2).y);
-      ctx.textAlign = "left";
-      ctx.fillStyle = "rgba(31,26,18,.9)";
-      roundRect(ctx, 14, viewport.height - 86, 126, 28, 5);
-      ctx.fill();
-      ctx.fillStyle = "#fff7e8";
-      ctx.font = "700 12px 'Microsoft JhengHei', sans-serif";
-      ctx.fillText(`視窗中心：${formatYear(centerYear)}`, 24, viewport.height - 72);
+      if (mobile) {
+        const trackName = layout[mobileTrackIndex]?.name || "";
+        mobileTrackLabel.textContent = `視窗中心：${formatYear(centerYear)}${trackName ? ` · ${trackName}` : ""}`;
+      } else {
+        ctx.textAlign = "left";
+        ctx.fillStyle = "rgba(31,26,18,.9)";
+        roundRect(ctx, 14, viewport.height - 86, 126, 28, 5);
+        ctx.fill();
+        ctx.fillStyle = "#fff7e8";
+        ctx.font = "700 12px 'Microsoft JhengHei', sans-serif";
+        ctx.fillText(`視窗中心：${formatYear(centerYear)}`, 24, viewport.height - 72);
+      }
       ctx.restore();
     }
 
@@ -1821,6 +1837,54 @@
       const rightPad = Math.max(80, rightOverlayWidth() + 42);
       viewport.tx = Math.min(leftPad, Math.max(viewport.width - WORLD.width * viewport.scale - rightPad, viewport.tx));
       viewport.ty = Math.min(80, Math.max(viewport.height - WORLD.totalHeight * viewport.scale - 80, viewport.ty));
+    }
+
+    function panVector() {
+      const buttons = new Set([...activePanPointers.values(), ...activePanKeys]);
+      return [...buttons].reduce((vector, button) => ({
+        x: vector.x + Number(button.dataset.panX),
+        y: vector.y + Number(button.dataset.panY)
+      }), { x: 0, y: 0 });
+    }
+
+    function panViewport(x, y, distance) {
+      const length = Math.hypot(x, y);
+      if (!length) return;
+      viewport.tx += (x / length) * distance;
+      viewport.ty += (y / length) * distance;
+      clampViewport();
+      draw();
+    }
+
+    function animatePan(now) {
+      panAnimationFrame = 0;
+      const vector = panVector();
+      if (!vector.x && !vector.y) return;
+      const elapsed = Math.min(40, now - panAnimationTime);
+      panAnimationTime = now;
+      panViewport(vector.x, vector.y, 250 * elapsed / 1000);
+      panAnimationFrame = requestAnimationFrame(animatePan);
+    }
+
+    function syncPanControls() {
+      const activeButtons = new Set([...activePanPointers.values(), ...activePanKeys]);
+      panButtons.forEach(button => button.classList.toggle("is-active", activeButtons.has(button)));
+      if (!activeButtons.size) {
+        if (panAnimationFrame) cancelAnimationFrame(panAnimationFrame);
+        panAnimationFrame = 0;
+        panAnimationTime = 0;
+        return;
+      }
+      if (!panAnimationFrame) {
+        panAnimationTime = performance.now();
+        panAnimationFrame = requestAnimationFrame(animatePan);
+      }
+    }
+
+    function clearPanControls() {
+      activePanPointers.clear();
+      activePanKeys.clear();
+      syncPanControls();
     }
 
     function rightOverlayWidth() {
@@ -2143,6 +2207,47 @@
     minimap.addEventListener("pointerup", event => {
       minimap.releasePointerCapture(event.pointerId);
       miniDragging = false;
+    });
+
+    panButtons.forEach(button => {
+      button.addEventListener("pointerdown", event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        button.setPointerCapture?.(event.pointerId);
+        activePanPointers.set(event.pointerId, button);
+        panViewport(Number(button.dataset.panX), Number(button.dataset.panY), 10);
+        syncPanControls();
+      });
+      const stopPointerPan = event => {
+        if (activePanPointers.get(event.pointerId) !== button) return;
+        activePanPointers.delete(event.pointerId);
+        syncPanControls();
+      };
+      button.addEventListener("pointerup", stopPointerPan);
+      button.addEventListener("pointercancel", stopPointerPan);
+      button.addEventListener("lostpointercapture", stopPointerPan);
+      button.addEventListener("keydown", event => {
+        if ((event.key !== " " && event.key !== "Enter") || event.repeat) return;
+        event.preventDefault();
+        activePanKeys.add(button);
+        panViewport(Number(button.dataset.panX), Number(button.dataset.panY), 10);
+        syncPanControls();
+      });
+      button.addEventListener("keyup", event => {
+        if (event.key !== " " && event.key !== "Enter") return;
+        event.preventDefault();
+        activePanKeys.delete(button);
+        syncPanControls();
+      });
+      button.addEventListener("blur", () => {
+        activePanKeys.delete(button);
+        syncPanControls();
+      });
+    });
+
+    window.addEventListener("blur", clearPanControls);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) clearPanControls();
     });
 
     function jumpFromMinimap(event) {
