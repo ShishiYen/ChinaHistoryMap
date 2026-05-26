@@ -41,6 +41,7 @@ canvas.dragging { cursor: grabbing; }
   position: absolute;
   top: 14px;
   left: 14px;
+  z-index: 20;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -343,13 +344,13 @@ button:hover { background: #fff0cc; }
 
 .assistant-drawer {
   position: absolute;
-  top: max(14px, env(safe-area-inset-top));
+  top: max(78px, calc(env(safe-area-inset-top) + 14px));
   right: 14px;
   z-index: 18;
   width: min(420px, calc(100vw - 28px));
-  max-height: min(760px, calc(100dvh - 28px));
+  max-height: min(700px, calc(100dvh - 92px));
   display: grid;
-  grid-template-rows: auto minmax(0, auto) minmax(390px, 1fr) minmax(54px, .16fr);
+  grid-template-rows: auto minmax(0, auto) minmax(0, 1fr) minmax(54px, .16fr);
   gap: 8px;
   min-height: 0;
   overflow: hidden;
@@ -697,12 +698,12 @@ button:hover { background: #fff0cc; }
   .tooltip { pointer-events: auto; }
 
   .assistant-drawer {
-    top: max(8px, env(safe-area-inset-top));
+    top: max(122px, calc(env(safe-area-inset-top) + 8px));
     right: 6px;
     left: 6px;
     width: auto;
-    max-height: calc(100dvh - 66px);
-    grid-template-rows: auto minmax(0, auto) minmax(300px, 1fr) minmax(46px, .14fr);
+    max-height: calc(100dvh - 188px);
+    grid-template-rows: auto minmax(0, auto) minmax(0, 1fr) minmax(46px, .14fr);
   }
 
   .assistant-grid {
